@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import type { SearchEntry } from '../data.ts';
-import { searchItems, type PreparedIndex } from '../search.ts';
+import type { RecipesFile, SearchEntry } from '../data.ts';
+import { searchItems, type PreparedIndex, type SearchOptions } from '../search.ts';
 import { ItemIcon } from './ItemIcon.tsx';
 
 interface SearchBoxProps {
   index: PreparedIndex;
+  jobs: RecipesFile['jobs'];
   onSelect: (entry: SearchEntry) => void;
 }
 
@@ -16,18 +17,41 @@ const CATEGORY_LABELS: Record<SearchEntry['c'], string> = {
   cosmetics: 'Cosmétique',
 };
 
-/** Recherche avec navigation clavier complète (flèches, Entrée, Échap). */
-export function SearchBox({ index, onSelect }: SearchBoxProps) {
+/** Recherche avec navigation clavier complète et filtres cumulables. */
+export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
   const [query, setQuery] = useState('');
   const [craftableOnly, setCraftableOnly] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [type, setType] = useState('');
+  const [levelMin, setLevelMin] = useState('');
+  const [levelMax, setLevelMax] = useState('');
+  const [jobId, setJobId] = useState('');
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const results = useMemo(
-    () => searchItems(index, query, { craftableOnly, limit: 30 }),
-    [index, query, craftableOnly],
+  const types = useMemo(
+    () => [...new Set(index.entries.map(entry => entry.t))].sort((a, b) => a.localeCompare(b, 'fr')),
+    [index],
   );
+
+  const options = useMemo<SearchOptions>(() => {
+    const min = levelMin === '' ? undefined : Number(levelMin);
+    const max = levelMax === '' ? undefined : Number(levelMax);
+    return {
+      craftableOnly,
+      limit: 30,
+      ...(type !== '' ? { type } : {}),
+      ...(min !== undefined && Number.isFinite(min) ? { levelMin: min } : {}),
+      ...(max !== undefined && Number.isFinite(max) ? { levelMax: max } : {}),
+      ...(jobId !== '' ? { jobId: Number(jobId) } : {}),
+    };
+  }, [craftableOnly, type, levelMin, levelMax, jobId]);
+
+  const activeFilterCount =
+    (type !== '' ? 1 : 0) + (levelMin !== '' ? 1 : 0) + (levelMax !== '' ? 1 : 0) + (jobId !== '' ? 1 : 0);
+
+  const results = useMemo(() => searchItems(index, query, options), [index, query, options]);
 
   const select = (entry: SearchEntry) => {
     onSelect(entry);
@@ -62,7 +86,7 @@ export function SearchBox({ index, onSelect }: SearchBoxProps) {
           aria-controls="search-results"
           aria-activedescendant={open ? `search-option-${highlighted}` : undefined}
           aria-label="Rechercher un objet"
-          placeholder="Rechercher un objet… (ex. : epee dus)"
+          placeholder="Rechercher un objet…"
           value={query}
           onChange={event => {
             setQuery(event.target.value);
@@ -74,16 +98,101 @@ export function SearchBox({ index, onSelect }: SearchBoxProps) {
           onKeyDown={onKeyDown}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-base outline-none placeholder:text-zinc-500 focus:border-amber-500"
         />
-        <label className="flex shrink-0 items-center gap-2 text-sm text-zinc-400">
-          <input
-            type="checkbox"
-            checked={craftableOnly}
-            onChange={event => setCraftableOnly(event.target.checked)}
-            className="h-4 w-4 accent-amber-500"
-          />
-          Craftables
-        </label>
+        <button
+          type="button"
+          onClick={() => setShowFilters(show => !show)}
+          aria-expanded={showFilters}
+          className={`shrink-0 rounded-md border px-3 py-2 text-sm ${
+            activeFilterCount > 0
+              ? 'border-amber-500/40 text-amber-300'
+              : 'border-zinc-700 text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          Filtres{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''} {showFilters ? '▴' : '▾'}
+        </button>
       </div>
+
+      {showFilters && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-zinc-800 p-3 text-sm">
+          <label className="flex items-center gap-2 text-zinc-400">
+            <input
+              type="checkbox"
+              checked={craftableOnly}
+              onChange={event => setCraftableOnly(event.target.checked)}
+              className="h-4 w-4 accent-amber-500"
+            />
+            Craftables uniquement
+          </label>
+          <label className="flex items-center gap-2 text-zinc-400">
+            Type
+            <select
+              value={type}
+              onChange={event => {
+                setType(event.target.value);
+                setOpen(true);
+              }}
+              className="max-w-40 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+            >
+              <option value="">Tous</option>
+              {types.map(name => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1 text-zinc-400">
+            Niveau
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={levelMin}
+              onChange={event => {
+                setLevelMin(event.target.value);
+                setOpen(true);
+              }}
+              placeholder="min"
+              aria-label="Niveau minimum"
+              className="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right"
+            />
+            –
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={levelMax}
+              onChange={event => {
+                setLevelMax(event.target.value);
+                setOpen(true);
+              }}
+              placeholder="max"
+              aria-label="Niveau maximum"
+              className="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-zinc-400">
+            Métier
+            <select
+              value={jobId}
+              onChange={event => {
+                setJobId(event.target.value);
+                setOpen(true);
+              }}
+              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+            >
+              <option value="">Tous</option>
+              {Object.entries(jobs)
+                .sort((a, b) => a[1].localeCompare(b[1], 'fr'))
+                .map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       {open && results.length > 0 && (
         <ul
@@ -116,9 +225,9 @@ export function SearchBox({ index, onSelect }: SearchBoxProps) {
           ))}
         </ul>
       )}
-      {open && query.trim() !== '' && results.length === 0 && (
+      {open && (query.trim() !== '' || activeFilterCount > 0) && results.length === 0 && (
         <p className="absolute z-10 mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
-          Aucun objet trouvé{craftableOnly ? ' (essaie sans le filtre « Craftables »)' : ''}.
+          Aucun objet trouvé{craftableOnly ? ' (essaie sans « Craftables uniquement »)' : ''}.
         </p>
       )}
     </div>

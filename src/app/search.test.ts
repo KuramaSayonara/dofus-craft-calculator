@@ -58,3 +58,33 @@ describe('searchItems', () => {
     expect(searchItems(index, 'du', { limit: 2 })).toHaveLength(2);
   });
 });
+
+describe('filtres cumulables', () => {
+  const richIndex = prepareIndex([
+    { id: 1, n: 'Épée du Dus', l: 40, t: 'Épée', c: 'equipment', i: null, r: 1, j: 11 },
+    { id: 2, n: 'Marteau Réel', l: 40, t: 'Marteau', c: 'equipment', i: null, r: 1, j: 11 },
+    { id: 3, n: 'Épée Basse', l: 10, t: 'Épée', c: 'equipment', i: null, r: 1, j: 27 },
+    { id: 4, n: 'Bois Rond', l: 1, t: 'Bois', c: 'resources', i: null, r: 0 },
+  ]);
+
+  it('filtre par type', () => {
+    expect(searchItems(richIndex, 'epee', { type: 'Épée' }).map(e => e.id)).toEqual([3, 1]);
+    expect(searchItems(richIndex, 'reel', { type: 'Épée' })).toEqual([]);
+  });
+
+  it('filtre par plage de niveaux', () => {
+    expect(searchItems(richIndex, 'epee', { levelMin: 20 }).map(e => e.id)).toEqual([1]);
+    expect(searchItems(richIndex, 'epee', { levelMax: 20 }).map(e => e.id)).toEqual([3]);
+  });
+
+  it('filtre par métier', () => {
+    expect(searchItems(richIndex, 'epee', { jobId: 27 }).map(e => e.id)).toEqual([3]);
+  });
+
+  it('sans requête, les filtres permettent de parcourir le catalogue', () => {
+    expect(searchItems(richIndex, '', { type: 'Épée' }).map(e => e.id).sort()).toEqual([1, 3]);
+    expect(searchItems(richIndex, '', { jobId: 11, levelMin: 30 })).toHaveLength(2);
+    // sans requête ni filtre : rien (le « craftable seulement » ne suffit pas)
+    expect(searchItems(richIndex, '', { craftableOnly: true })).toEqual([]);
+  });
+});

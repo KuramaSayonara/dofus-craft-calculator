@@ -28,12 +28,39 @@ export function prepareIndex(entries: ReadonlyArray<SearchEntry>): PreparedIndex
 export interface SearchOptions {
   readonly craftableOnly?: boolean;
   readonly limit?: number;
+  /** nom de type exact (« Épée », « Bois »…) */
+  readonly type?: string;
+  readonly levelMin?: number;
+  readonly levelMax?: number;
+  /** id du métier qui craft l'objet */
+  readonly jobId?: number;
+}
+
+function matchesFilters(entry: SearchEntry, options: SearchOptions): boolean {
+  if (options.craftableOnly === true && entry.r !== 1) return false;
+  if (options.type !== undefined && entry.t !== options.type) return false;
+  if (options.levelMin !== undefined && entry.l < options.levelMin) return false;
+  if (options.levelMax !== undefined && entry.l > options.levelMax) return false;
+  if (options.jobId !== undefined && entry.j !== options.jobId) return false;
+  return true;
+}
+
+/** au moins un filtre restrictif au-delà de « craftable seulement » */
+function hasBrowseFilters(options: SearchOptions): boolean {
+  return (
+    options.type !== undefined ||
+    options.levelMin !== undefined ||
+    options.levelMax !== undefined ||
+    options.jobId !== undefined
+  );
 }
 
 /**
  * Tous les jetons de la requête doivent apparaître dans le nom (dans n'importe
  * quel ordre). Score : préfixe du nom < début de mot < milieu de mot, puis
  * noms courts d'abord — les correspondances exactes remontent naturellement.
+ * Les filtres (type, niveau, métier, craftable) se cumulent à la requête ;
+ * sans requête, ils permettent de parcourir le catalogue filtré.
  */
 export function searchItems(
   index: PreparedIndex,
@@ -42,12 +69,12 @@ export function searchItems(
 ): SearchEntry[] {
   const limit = options.limit ?? 50;
   const tokens = normalizeText(query).split(/\s+/).filter(token => token.length > 0);
-  if (tokens.length === 0) return [];
+  if (tokens.length === 0 && !hasBrowseFilters(options)) return [];
 
   const scored: { entry: SearchEntry; score: number }[] = [];
   for (let i = 0; i < index.entries.length; i++) {
     const entry = index.entries[i]!;
-    if (options.craftableOnly === true && entry.r !== 1) continue;
+    if (!matchesFilters(entry, options)) continue;
     const name = index.normalized[i]!;
     let score = 0;
     let match = true;
