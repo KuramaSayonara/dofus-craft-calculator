@@ -30,6 +30,18 @@ export function parseKamas(input: string): number | null {
   return Number(digits);
 }
 
+/**
+ * Prix unitaire depuis un prix de lot (achat en x10 / x100 à l'hôtel de vente).
+ * Convention documentée : arrondi au kama SUPÉRIEUR — le coût d'un craft ne
+ * doit jamais être sous-estimé par la division d'un lot.
+ */
+export function unitPriceFromLot(lotPrice: number, lotSize: 1 | 10 | 100): number {
+  if (!Number.isSafeInteger(lotPrice) || lotPrice < 0) {
+    throw new RangeError(`prix de lot invalide : ${lotPrice}`);
+  }
+  return Math.ceil(lotPrice / lotSize);
+}
+
 /** Formate un montant entier : 1234567 → « 1␟234␟567 » (séparateur U+202F). */
 export function formatKamas(amount: number): string {
   if (!Number.isSafeInteger(amount)) {

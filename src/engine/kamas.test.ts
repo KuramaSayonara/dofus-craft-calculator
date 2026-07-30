@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatKamas, parseKamas } from './kamas.ts';
+import { formatKamas, parseKamas, unitPriceFromLot } from './kamas.ts';
 
 describe('parseKamas', () => {
   it('lit les montants simples', () => {
@@ -57,5 +57,23 @@ describe('formatKamas', () => {
   it('refuse les montants non entiers', () => {
     expect(() => formatKamas(1.5)).toThrow(RangeError);
     expect(() => formatKamas(Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe('unitPriceFromLot', () => {
+  it('divise le prix du lot par sa taille', () => {
+    expect(unitPriceFromLot(1500, 10)).toBe(150);
+    expect(unitPriceFromLot(120_000, 100)).toBe(1200);
+    expect(unitPriceFromLot(42, 1)).toBe(42);
+  });
+
+  it('arrondit au kama supérieur (le coût n\'est jamais sous-estimé)', () => {
+    expect(unitPriceFromLot(1234, 10)).toBe(124); // 123,4 → 124
+    expect(unitPriceFromLot(999, 100)).toBe(10); // 9,99 → 10
+  });
+
+  it('refuse les prix invalides', () => {
+    expect(() => unitPriceFromLot(-1, 10)).toThrow(RangeError);
+    expect(() => unitPriceFromLot(1.5, 10)).toThrow(RangeError);
   });
 });

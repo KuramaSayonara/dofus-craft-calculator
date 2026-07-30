@@ -5,7 +5,7 @@
 export { DEFAULT_MARGINAL_THRESHOLD_PCT, DEFAULT_MAX_DEPTH, DEFAULT_TAX_RATE } from './config.ts';
 export type { PriceBook, RecipeGraph, RecipeInfo } from './types.ts';
 export { graphFromRecipesFile } from './graph.ts';
-export { formatKamas, KAMAS_GROUP_SEPARATOR, parseKamas } from './kamas.ts';
+export { formatKamas, KAMAS_GROUP_SEPARATOR, parseKamas, unitPriceFromLot } from './kamas.ts';
 export {
   analyzeCraftCost,
   createCostAnalyzer,
