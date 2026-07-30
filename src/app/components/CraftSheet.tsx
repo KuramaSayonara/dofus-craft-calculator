@@ -12,6 +12,7 @@ import type { PriceEntry } from '../state.ts';
 import { CraftTree } from './CraftTree.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 import { ProfitPanel } from './ProfitPanel.tsx';
+import { ShoppingSection } from './ShoppingSection.tsx';
 
 interface CraftSheetProps {
   entry: SearchEntry;
@@ -216,6 +217,14 @@ export function CraftSheet(props: CraftSheetProps) {
           </button>
         </div>
       )}
+
+      <ShoppingSection
+        key={entry.id}
+        list={list}
+        entryById={entryById}
+        quantity={quantity}
+        itemName={entry.n}
+      />
 
       <ProfitPanel
         craftCost={root.craftUnitCost}
