@@ -1,0 +1,68 @@
+# Mise à jour automatique des données du jeu.
+# Tourne chaque lundi matin (+ déclenchement manuel), régénère data/ via
+# scripts/ingest.ts, et ouvre une Pull Request si quelque chose a changé —
+# jamais de push direct sur main. Le garde-fou anti-régression de l'ingestion
+# fait échouer le job (donc aucune PR) si les données rétrécissent.
+name: update-data
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Sauvegarder les données actuelles
+        run: cp -r data /tmp/old-data
+
+      - name: Régénérer les données
+        run: npm run ingest
+
+      - name: Détecter et résumer les changements
+        id: diff
+        run: |
+          if git status --porcelain data/ | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$(node -p 'JSON.parse(require("fs").readFileSync("data/meta.json","utf8")).gameVersion')" >> "$GITHUB_OUTPUT"
+            npm run --silent diff-data -- /tmp/old-data data > /tmp/pr-body.md
+            cat /tmp/pr-body.md
+            {
+              echo 'body<<DIFF_EOF'
+              cat /tmp/pr-body.md
+              echo 'DIFF_EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Aucun changement dans les données."
+          fi
+
+      - name: Ouvrir une Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: data-update
+          delete-branch: true
+          add-paths: data
+          commit-message: "data: mise à jour des données du jeu (Dofus ${{ steps.diff.outputs.version }})"
+          title: "Mise à jour des données du jeu (Dofus ${{ steps.diff.outputs.version }})"
+          body: ${{ steps.diff.outputs.body }}
