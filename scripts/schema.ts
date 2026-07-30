@@ -54,13 +54,14 @@ export type Category = (typeof CATEGORIES)[number];
 // data/items.json — un objet par ligne, trié par id.
 // `icon` : id numérique quand l'URL DofusDude suit le motif standard
 // (l'app reconstruit l'URL), URL complète sinon, null si aucune image.
+// L'id 0 existe réellement (l'objet « Kama ») et sert une vraie image.
 export const itemRecordSchema = z.object({
   id: z.number().int().positive(),
   name: z.string().min(1),
   level: z.number().int().min(0),
   type: z.string().min(1),
   category: z.enum(CATEGORIES),
-  icon: z.union([z.number().int().positive(), z.string().min(1)]).nullable(),
+  icon: z.union([z.number().int().min(0), z.string().min(1)]).nullable(),
 });
 export type ItemRecord = z.infer<typeof itemRecordSchema>;
 
@@ -89,7 +90,7 @@ export const searchEntrySchema = z.object({
   l: z.number().int().min(0),
   t: z.string().min(1),
   c: z.enum(CATEGORIES),
-  i: z.union([z.number().int().positive(), z.string().min(1)]).nullable(),
+  i: z.union([z.number().int().min(0), z.string().min(1)]).nullable(),
   r: z.union([z.literal(0), z.literal(1)]),
   j: z.number().int().optional(),
 });
