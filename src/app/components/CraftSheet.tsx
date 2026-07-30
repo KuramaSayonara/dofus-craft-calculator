@@ -5,10 +5,11 @@ import {
   formatKamas,
   type PriceBook,
   type RecipeGraph,
+  type SourcingMode,
 } from '../../engine/index.ts';
 import type { RecipesFile, SearchEntry } from '../data.ts';
+import { CraftTree } from './CraftTree.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
-import { PriceInput } from './PriceInput.tsx';
 import { ProfitPanel } from './ProfitPanel.tsx';
 
 interface CraftSheetProps {
@@ -18,19 +19,32 @@ interface CraftSheetProps {
   entryById: ReadonlyMap<number, SearchEntry>;
   prices: PriceBook;
   onPriceChange: (itemId: number, value: number | null) => void;
+  modes: ReadonlyMap<number, SourcingMode>;
+  onModeChange: (itemId: number, mode: SourcingMode) => void;
   quantity: number;
   onQuantityChange: (value: number) => void;
 }
 
-/** Fiche de craft : ingrédients, prix, coût total, rentabilité. */
+/** Fiche de craft : arbre récursif, prix, coût total, rentabilité. */
 export function CraftSheet(props: CraftSheetProps) {
-  const { entry, graph, jobs, entryById, prices, onPriceChange, quantity, onQuantityChange } = props;
+  const {
+    entry,
+    graph,
+    jobs,
+    entryById,
+    prices,
+    onPriceChange,
+    modes,
+    onModeChange,
+    quantity,
+    onQuantityChange,
+  } = props;
 
-  // Phase 3 : fiche « à plat » — les ingrédients sont achetés à leur prix
-  // saisi (maxDepth 1 : pas encore d'arbre récursif, prévu en Phase 4).
+  // arbre récursif complet : profondeur par défaut du moteur, arbitrage
+  // acheter / crafter / auto par ingrédient via `modes`
   const root = useMemo(
-    () => analyzeCraftCost(graph, prices, entry.id, { maxDepth: 1 }).root,
-    [graph, prices, entry.id],
+    () => analyzeCraftCost(graph, prices, entry.id, { modes }).root,
+    [graph, prices, modes, entry.id],
   );
   const list = useMemo(() => buildShoppingList(root, quantity, prices), [root, quantity, prices]);
 
@@ -78,66 +92,31 @@ export function CraftSheet(props: CraftSheetProps) {
         </label>
       </header>
 
-      <section className="overflow-x-auto rounded-lg border border-zinc-800">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-left text-xs uppercase tracking-wide text-zinc-500">
-              <th className="px-3 py-2 font-medium" colSpan={2}>Ingrédient</th>
-              <th className="px-3 py-2 text-right font-medium">Qté ×{quantity}</th>
-              <th className="px-3 py-2 text-right font-medium">Prix unitaire</th>
-              <th className="px-3 py-2 text-right font-medium">Sous-total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {root.children.map(child => {
-              const ing = entryById.get(child.node.itemId);
-              const totalQty = child.quantityPerCraft * quantity;
-              const unit = child.node.buyUnitPrice;
-              return (
-                <tr key={child.node.itemId} className="border-b border-zinc-800/60 last:border-0">
-                  <td className="w-10 py-1 pl-3">
-                    <ItemIcon icon={ing?.i ?? null} />
-                  </td>
-                  <td className="px-3 py-1">
-                    <span className="block truncate">{ing?.n ?? `Objet ${child.node.itemId}`}</span>
-                    {child.node.craftable && (
-                      <span className="text-xs text-zinc-500">craftable — arbre en Phase 4</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-1 text-right tabular-nums text-zinc-300">
-                    {formatKamas(totalQty)}
-                  </td>
-                  <td className="px-3 py-1 text-right">
-                    <PriceInput
-                      value={unit}
-                      onChange={value => onPriceChange(child.node.itemId, value)}
-                      label={`Prix unitaire de ${ing?.n ?? child.node.itemId}`}
-                    />
-                  </td>
-                  <td className="px-3 py-1 text-right tabular-nums">
-                    {unit !== null ? `${formatKamas(unit * totalQty)} K` : <span className="text-zinc-500">—</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="bg-zinc-900/60 font-medium">
-              <td className="px-3 py-2" colSpan={4}>
-                Coût du craft {quantity > 1 ? `(× ${quantity})` : ''}
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {totalCost !== null ? (
-                  `${formatKamas(totalCost)} K`
-                ) : (
-                  <span className="font-normal text-amber-400">
-                    {formatKamas(list.knownCost)} K + {list.unknownCount} prix manquant{list.unknownCount > 1 ? 's' : ''}
-                  </span>
-                )}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+      <section className="rounded-lg border border-zinc-800">
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2 text-xs uppercase tracking-wide text-zinc-500">
+          <span>Ingrédients — Auto choisit le moins cher (achat ou craft)</span>
+          <span>Prix unitaire · Coût</span>
+        </div>
+        <CraftTree
+          root={root}
+          quantity={quantity}
+          entryById={entryById}
+          modes={modes}
+          onModeChange={onModeChange}
+          onPriceChange={onPriceChange}
+        />
+        <div className="flex items-center justify-between gap-2 bg-zinc-900/60 px-3 py-2 font-medium">
+          <span>Coût du craft {quantity > 1 ? `(× ${quantity})` : ''}</span>
+          <span className="text-right tabular-nums">
+            {totalCost !== null ? (
+              `${formatKamas(totalCost)} K`
+            ) : (
+              <span className="font-normal text-amber-400">
+                {formatKamas(list.knownCost)} K + {list.unknownCount} prix manquant{list.unknownCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </span>
+        </div>
       </section>
 
       <ProfitPanel

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { graphFromRecipesFile, type PriceBook } from '../engine/index.ts';
+import { graphFromRecipesFile, type PriceBook, type SourcingMode } from '../engine/index.ts';
 import { loadRecipes, loadSearchIndex, type RecipesFile, type SearchEntry } from './data.ts';
 import { prepareIndex } from './search.ts';
 import { CraftSheet } from './components/CraftSheet.tsx';
@@ -11,6 +11,7 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SearchEntry | null>(null);
   const [prices, setPrices] = useState<PriceBook>(new Map());
+  const [modes, setModes] = useState<ReadonlyMap<number, SourcingMode>>(new Map());
   const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
@@ -34,6 +35,16 @@ export function App() {
       const next = new Map(previous);
       if (value === null) next.delete(itemId);
       else next.set(itemId, value);
+      return next;
+    });
+  };
+
+  const setMode = (itemId: number, mode: SourcingMode) => {
+    setModes(previous => {
+      const next = new Map(previous);
+      // 'auto' est le défaut : on ne stocke que les écarts au défaut
+      if (mode === 'auto') next.delete(itemId);
+      else next.set(itemId, mode);
       return next;
     });
   };
@@ -73,6 +84,8 @@ export function App() {
                 entryById={entryById}
                 prices={prices}
                 onPriceChange={setPrice}
+                modes={modes}
+                onModeChange={setMode}
                 quantity={quantity}
                 onQuantityChange={setQuantity}
               />
