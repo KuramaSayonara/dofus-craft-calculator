@@ -19,6 +19,7 @@ Deux partis pris qui le distinguent des outils existants :
 | **Rentabilité** | Taxe de l'hôtel de vente paramétrable, seuil de rentabilité exact au kama, comparaison prix marché / ton prix, profit par craft et pour la quantité voulue. |
 | **Carnet de prix** | Profils multi-serveurs, horodatage et pastilles de fraîcheur, saisie par lot ×1/×10/×100, import en masse `nom;prix`, export/import JSON. |
 | **Stock possédé** | Saisie de ce qu'on a déjà en jeu : la liste de courses ne réclame que le complément, et deux coûts sont affichés (voir ci-dessous). |
+| **Demande des quêtes** | Pour les 233 crafts réclamés par une quête : quelle quête, en quelle quantité, quelle catégorie et à quel niveau. Explique pourquoi un objet se vend par lot, avec un filtre de recherche dédié. |
 | **Liste de courses** | Ressources de base agrégées après résolution de l'arbre, stock déduit, cases à cocher, export texte. |
 | **Suivi** | Crafts sauvegardés en dossiers ; ventes en cours à coût figé ; historique avec profit réel, marge moyenne et classement. |
 | **Top crafts** | Balayage de tous les crafts du jeu avec tes prix, trié par marge, plus les crafts « presque calculables » et le nombre de prix qui manquent. |
@@ -45,6 +46,23 @@ Exemple réel. Potion de Souvenir (10 Sauge + 20 Ortie), Sauge à 101 K, Ortie �
 2 706 K. Coût complet 3 930 K → perte de 1 278 K. Avec 1 000 Sauge déjà en stock, il ne reste
 que 2 920 K à sortir… mais la vente ne rapporte que 2 652 K net : **encore 268 K de perte**.
 Posséder la ressource ne rend pas un craft rentable, ça réduit seulement la mise de départ.
+
+## Pourquoi certains crafts se vendent par lot
+
+Beaucoup d'objets ne se vendent pas à l'unité : une quête en réclame un nombre précis, et les
+joueurs achètent ce nombre d'un coup. C'est déroutant quand on débute. L'outil affiche donc,
+pour chaque craft concerné, la ou les quêtes qui le demandent et la quantité exacte.
+
+Exemple : le **Bâton de Boisaille** est réclamé **10 fois** par la quête « Du repos mais pas
+trop... » (Alignement Bonta, niveau 51). Personne n'en achète un seul — d'où un bouton pour
+calculer directement le coût et la marge d'un lot de 10.
+
+Le filtre **« 📜 Demandé par une quête »** de la recherche permet de parcourir ces objets même
+sans savoir lesquels chercher.
+
+**Ce que l'outil ne sait pas** : le volume réellement échangé sur ton serveur. Aucune API
+publique ne l'expose, et il n'a pas été inventé. La quantité affichée est celle que la quête
+exige — c'est ce qui explique la taille des lots, pas la demande du jour.
 
 ## Lancer le projet
 
@@ -85,6 +103,7 @@ Fichiers produits — jamais édités à la main :
 |---|---|
 | `data/items.json` | Tous les objets (nom, niveau, type, catégorie, icône). |
 | `data/recipes.json` | Recettes, métier et niveau de craft. |
+| `data/quest-needs.json` | Quêtes qui réclament un objet, et en quelle quantité. |
 | `data/search-index.json` | Index léger chargé en premier pour une recherche instantanée. |
 | `data/meta.json` | Version du jeu et comptages (sert de garde-fou au run suivant). |
 
