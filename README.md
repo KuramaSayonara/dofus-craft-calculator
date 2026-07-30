@@ -19,7 +19,8 @@ Deux partis pris qui le distinguent des outils existants :
 | **Rentabilité** | Taxe de l'hôtel de vente paramétrable, seuil de rentabilité exact au kama, comparaison prix marché / ton prix, profit par craft et pour la quantité voulue. |
 | **Carnet de prix** | Profils multi-serveurs, horodatage et pastilles de fraîcheur, saisie par lot ×1/×10/×100, import en masse `nom;prix`, export/import JSON. |
 | **Stock possédé** | Saisie de ce qu'on a déjà en jeu : la liste de courses ne réclame que le complément, et deux coûts sont affichés (voir ci-dessous). |
-| **Demande des quêtes** | Pour les 233 crafts réclamés par une quête : quelle quête, en quelle quantité, quelle catégorie et à quel niveau. Explique pourquoi un objet se vend par lot, avec un filtre de recherche dédié. |
+| **Demande des quêtes** | Pour les 428 crafts réclamés par une quête : quelle quête, en quelle quantité, quelle catégorie et à quel niveau. Explique pourquoi un objet se vend par lot, avec un filtre de recherche dédié. |
+| **Ventes observées** | Saisie facultative du nombre d'exemplaires vus vendus sur 24 h / 7 j / 30 j : en déduit un rythme d'écoulement, un délai pour vendre sa production et un profit par jour. |
 | **Liste de courses** | Ressources de base agrégées après résolution de l'arbre, stock déduit, cases à cocher, export texte. |
 | **Suivi** | Crafts sauvegardés en dossiers ; ventes en cours à coût figé ; historique avec profit réel, marge moyenne et classement. |
 | **Top crafts** | Balayage de tous les crafts du jeu avec tes prix, trié par marge, plus les crafts « presque calculables » et le nombre de prix qui manquent. |
@@ -62,7 +63,26 @@ sans savoir lesquels chercher.
 
 **Ce que l'outil ne sait pas** : le volume réellement échangé sur ton serveur. Aucune API
 publique ne l'expose, et il n'a pas été inventé. La quantité affichée est celle que la quête
-exige — c'est ce qui explique la taille des lots, pas la demande du jour.
+exige — c'est ce qui explique la taille des lots, pas la demande du jour. Pour la demande
+réelle, la section « Ventes observées » permet de saisir soi-même ce qu'on constate à l'hôtel.
+
+### D'où viennent ces données
+
+Les besoins sont reconstruits depuis les **objectifs** de quête, pas depuis le champ `need`
+agrégé au niveau de la quête : ce dernier est incomplet (la quête « Produits naturels » y
+déclare 3 objets alors que ses objectifs en réclament 6).
+
+Deux subtilités traitées :
+
+- Pour un objectif de type « apporter N exemplaires », l'objet demandé est dans `parameters`,
+  tandis que `need` contient sa **recette décomposée**. Utiliser `need` inventerait une demande
+  sur des ingrédients que DofusDB ne relie pas à la quête. Cette interprétation a été validée
+  sur 361 couples (objet, quête) confrontés à l'index inverse `questsThatUse` : 100 % de
+  concordance, zéro contradiction.
+- Les identifiants qui ne correspondent à aucun objet du catalogue (monstres, PNJ) sont écartés.
+
+**Limite connue** : 25 crafts que `questsThatUse` relie à une quête restent absents, la base
+se contredisant elle-même sur ces cas. La couverture est de 428 crafts.
 
 ## Lancer le projet
 
