@@ -1,0 +1,47 @@
+{
+  "gameVersion": "3.6.8.8",
+  "jobsSource": "dofusdb",
+  "counts": {
+    "itemsTotal": 17041,
+    "craftableTotal": 4847,
+    "byCategory": {
+      "equipment": {
+        "items": 4356,
+        "craftable": 3363
+      },
+      "resources": {
+        "items": 3639,
+        "craftable": 869
+      },
+      "consumables": {
+        "items": 3278,
+        "craftable": 378
+      },
+      "quest": {
+        "items": 3358,
+        "craftable": 231
+      },
+      "cosmetics": {
+        "items": 2410,
+        "craftable": 6
+      }
+    },
+    "craftableByJob": {
+      "Bijoutier": 735,
+      "Cordonnier": 720,
+      "Tailleur": 712,
+      "Base": 550,
+      "Forgeron": 484,
+      "Façonneur": 439,
+      "Sculpteur": 289,
+      "Alchimiste": 262,
+      "Éleveur": 211,
+      "Bricoleur": 179,
+      "Paysan": 80,
+      "Pêcheur": 65,
+      "Chasseur": 48,
+      "Mineur": 41,
+      "Bûcheron": 32
+    }
+  }
+}
