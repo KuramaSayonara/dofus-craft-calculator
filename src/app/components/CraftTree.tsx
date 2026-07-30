@@ -100,61 +100,67 @@ export function CraftTree(props: CraftTreeProps) {
 
     return (
       <li key={pathKey}>
-        <div
-          className="flex min-w-[560px] items-center gap-2 border-b border-zinc-800/60 py-1.5 pr-3"
-          style={{ paddingLeft: `${depth * 1.25}rem` }}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-label={`${open ? 'Replier' : 'Déplier'} ${name}`}
-              onClick={() => toggle(pathKey, defaultOpen)}
-              className="w-5 shrink-0 text-zinc-400 hover:text-zinc-100"
-            >
-              {open ? '▾' : '▸'}
-            </button>
-          ) : (
-            <span className="w-5 shrink-0" />
-          )}
-          <ItemIcon icon={entry?.i ?? null} />
-          <div className="min-w-0 flex-1">
-            <span className="block truncate text-sm">
-              {name} <span className="tabular-nums text-zinc-400">× {formatKamas(neededQty)}</span>
-            </span>
-            <span className="flex flex-wrap items-center gap-1 text-xs text-zinc-500">
-              {node.craftable && <span>{SOURCE_LABELS[node.source]}</span>}
-              {node.cycle && (
-                <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-red-400">cycle coupé</span>
-              )}
-              {node.depthLimited && (
-                <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-400">profondeur max</span>
-              )}
-              {!node.craftable && node.buyUnitPrice === null && (
-                <span className="text-amber-400">prix à renseigner</span>
-              )}
+        {/* une seule ligne sur large écran ; le bloc de contrôles passe
+            à la ligne d'un bloc quand la largeur manque (mobile) */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-800/60 py-1.5 pr-2">
+          <div
+            className="flex min-w-0 flex-1 basis-52 items-center gap-2"
+            style={{ paddingLeft: `${depth * 1.25}rem` }}
+          >
+            {hasChildren ? (
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-label={`${open ? 'Replier' : 'Déplier'} ${name}`}
+                onClick={() => toggle(pathKey, defaultOpen)}
+                className="w-5 shrink-0 text-zinc-400 hover:text-zinc-100"
+              >
+                {open ? '▾' : '▸'}
+              </button>
+            ) : (
+              <span className="w-5 shrink-0" />
+            )}
+            <ItemIcon icon={entry?.i ?? null} />
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm">
+                {name} <span className="tabular-nums text-zinc-400">× {formatKamas(neededQty)}</span>
+              </span>
+              <span className="flex flex-wrap items-center gap-1 text-xs text-zinc-500">
+                {node.craftable && <span>{SOURCE_LABELS[node.source]}</span>}
+                {node.cycle && (
+                  <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-red-400">cycle coupé</span>
+                )}
+                {node.depthLimited && (
+                  <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-400">profondeur max</span>
+                )}
+                {!node.craftable && node.buyUnitPrice === null && (
+                  <span className="text-amber-400">prix à renseigner</span>
+                )}
+                <SavingsBadge node={node} />
+              </span>
+            </div>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            {node.craftable && (
+              <ModeSwitch
+                itemName={name}
+                value={modes.get(node.itemId) ?? 'auto'}
+                onChange={mode => onModeChange(node.itemId, mode)}
+              />
+            )}
+            <PriceInput
+              value={node.buyUnitPrice}
+              onChange={value => onPriceChange(node.itemId, value)}
+              label={`Prix unitaire de ${name}`}
+              withLot
+              {...(priceEntries.get(node.itemId) !== undefined
+                ? { timestamp: priceEntries.get(node.itemId)!.t }
+                : {})}
+            />
+            <span className="w-20 shrink-0 text-right text-sm tabular-nums sm:w-28">
+              {totalCost !== null ? `${formatKamas(totalCost)} K` : <span className="text-zinc-500">—</span>}
             </span>
           </div>
-          <SavingsBadge node={node} />
-          {node.craftable && (
-            <ModeSwitch
-              itemName={name}
-              value={modes.get(node.itemId) ?? 'auto'}
-              onChange={mode => onModeChange(node.itemId, mode)}
-            />
-          )}
-          <PriceInput
-            value={node.buyUnitPrice}
-            onChange={value => onPriceChange(node.itemId, value)}
-            label={`Prix unitaire de ${name}`}
-            withLot
-            {...(priceEntries.get(node.itemId) !== undefined
-              ? { timestamp: priceEntries.get(node.itemId)!.t }
-              : {})}
-          />
-          <span className="w-28 shrink-0 text-right text-sm tabular-nums">
-            {totalCost !== null ? `${formatKamas(totalCost)} K` : <span className="text-zinc-500">—</span>}
-          </span>
         </div>
         {hasChildren && open && (
           <ul>
@@ -173,7 +179,7 @@ export function CraftTree(props: CraftTreeProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div>
       <ul aria-label="Arbre de craft">
         {root.children.map(child =>
           renderNode(child.node, child.quantityPerCraft * quantity, 0, `r/${child.node.itemId}`),

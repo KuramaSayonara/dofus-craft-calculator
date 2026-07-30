@@ -94,7 +94,7 @@ export function PriceInput({ value, onChange, label, placeholder, withLot, times
             event.currentTarget.blur();
           }
         }}
-        className={`w-28 rounded border bg-zinc-900 px-2 py-1 text-right tabular-nums outline-none focus:border-amber-500 ${
+        className={`w-20 rounded border bg-zinc-900 px-2 py-1 text-right tabular-nums outline-none focus:border-amber-500 sm:w-28 ${
           invalid ? 'border-red-500' : 'border-zinc-700'
         }`}
       />

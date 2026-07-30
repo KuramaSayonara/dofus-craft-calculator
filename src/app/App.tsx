@@ -163,8 +163,10 @@ export function App() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-3 py-4 sm:px-6">
-      <header className="mb-4 space-y-3">
+    <div className="mx-auto max-w-3xl px-3 pb-10 sm:px-6">
+      {/* en-tête collant : les onglets restent atteignables en scrollant un
+          long arbre de craft, y compris sur téléphone */}
+      <header className="sticky top-0 z-20 -mx-3 mb-4 space-y-3 border-b border-zinc-800/60 bg-zinc-950/90 px-3 pb-2 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-bold">
             Calculateur de craft <span className="font-normal text-zinc-400">— Dofus 3</span>
