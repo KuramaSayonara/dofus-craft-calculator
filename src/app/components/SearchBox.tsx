@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RecipesFile, SearchEntry } from '../data.ts';
 import { searchItems, type PreparedIndex, type SearchOptions } from '../search.ts';
 import { ItemIcon } from './ItemIcon.tsx';
@@ -30,6 +30,18 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Un clic hors de la zone de recherche referme la liste de résultats.
+  // Sans ça, cocher un filtre laissait la liste ouverte par-dessus la fiche.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
 
   const types = useMemo(
     () => [...new Set(index.entries.map(entry => entry.t))].sort((a, b) => a.localeCompare(b, 'fr')),
@@ -82,7 +94,7 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
   };
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <div className="flex items-center gap-3">
         <input
           ref={inputRef}
@@ -106,7 +118,14 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
         />
         <button
           type="button"
-          onClick={() => setShowFilters(show => !show)}
+          onClick={() => {
+            // refermer le panneau referme aussi la liste de résultats qu'un
+            // changement de filtre avait pu ouvrir
+            setShowFilters(show => {
+              if (show) setOpen(false);
+              return !show;
+            });
+          }}
           aria-expanded={showFilters}
           className={`shrink-0 rounded-md border px-3 py-2 text-sm ${
             activeFilterCount > 0
