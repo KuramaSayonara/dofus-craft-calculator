@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultAppData,
+  inventoryOf,
   modesOfSavedCraft,
   parseAppData,
   priceBookOf,
   priceEntriesOf,
   reduce,
   salesOf,
+  type AppData,
   type Sale,
   type SavedCraft,
 } from './state.ts';
@@ -120,6 +122,39 @@ describe('sauvegardes de crafts', () => {
   });
 });
 
+describe('stock possédé', () => {
+  it('enregistre, met à jour et efface une quantité', () => {
+    let data = reduce(defaultAppData(), { type: 'set-stock', itemId: 289, quantity: 1000 });
+    expect(inventoryOf(data).get(289)).toBe(1000);
+    data = reduce(data, { type: 'set-stock', itemId: 289, quantity: 40 });
+    expect(inventoryOf(data).get(289)).toBe(40);
+    data = reduce(data, { type: 'set-stock', itemId: 289, quantity: null });
+    expect(inventoryOf(data).has(289)).toBe(false);
+  });
+
+  it('traite 0 (ou négatif) comme une absence de stock', () => {
+    let data = reduce(defaultAppData(), { type: 'set-stock', itemId: 1, quantity: 0 });
+    expect(inventoryOf(data).has(1)).toBe(false);
+    data = reduce(data, { type: 'set-stock', itemId: 1, quantity: -5 });
+    expect(inventoryOf(data).has(1)).toBe(false);
+  });
+
+  it('le stock est isolé par profil', () => {
+    let data = reduce(defaultAppData(), { type: 'set-stock', itemId: 289, quantity: 1000 });
+    data = reduce(data, { type: 'add-profile', id: 'p2', name: 'Serveur 2' });
+    expect(inventoryOf(data).size).toBe(0);
+    data = reduce(data, { type: 'switch-profile', profileId: 'default' });
+    expect(inventoryOf(data).get(289)).toBe(1000);
+  });
+
+  it('se vide entièrement sur demande', () => {
+    let data = reduce(defaultAppData(), { type: 'set-stock', itemId: 1, quantity: 5 });
+    data = reduce(data, { type: 'set-stock', itemId: 2, quantity: 7 });
+    data = reduce(data, { type: 'clear-stock' });
+    expect(inventoryOf(data).size).toBe(0);
+  });
+});
+
 describe('parseAppData', () => {
   it('accepte un export valide et rejette le reste', () => {
     const data = defaultAppData();
@@ -128,5 +163,17 @@ describe('parseAppData', () => {
     expect(parseAppData(null)).toBeNull();
     // profil actif inexistant → rejeté
     expect(parseAppData({ ...data, activeProfileId: 'fantome' })).toBeNull();
+  });
+
+  it('relit sans perte des données enregistrées avant l\'arrivée du stock', () => {
+    // sauvegarde d'une version antérieure : aucun champ `inventory`
+    const ancien = defaultAppData();
+    ancien.prices['default'] = { '289': { p: 101, t: 1 } };
+    const { inventory: _absent, ...sansStock } = JSON.parse(JSON.stringify(ancien)) as AppData;
+    const relu = parseAppData(sansStock);
+    expect(relu).not.toBeNull();
+    expect(relu!.prices['default']).toEqual({ '289': { p: 101, t: 1 } });
+    expect(relu!.inventory).toEqual({});
+    expect(inventoryOf(relu!).size).toBe(0);
   });
 });

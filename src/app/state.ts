@@ -66,6 +66,12 @@ export const appDataSchema = z.object({
   profiles: z.array(profileSchema).min(1),
   /** profileId → (itemId → prix horodaté) */
   prices: z.record(z.string(), z.record(z.string(), priceEntrySchema)),
+  /**
+   * profileId → (itemId → quantité possédée).
+   * Champ ajouté après coup : le défaut permet de relire sans perte les
+   * données enregistrées avant l'arrivée du stock.
+   */
+  inventory: z.record(z.string(), z.record(z.string(), z.number().int().min(0))).default({}),
   savedCrafts: z.array(savedCraftSchema),
   /** profileId → ventes (les kamas sont propres à un serveur) */
   sales: z.record(z.string(), z.array(saleSchema)),
@@ -80,6 +86,7 @@ export function defaultAppData(): AppData {
     activeProfileId: id,
     profiles: [{ id, name: 'Mon serveur' }],
     prices: { [id]: {} },
+    inventory: { [id]: {} },
     savedCrafts: [],
     sales: { [id]: [] },
     settings: { taxRate: 0.02, marginalThresholdPct: 10 },
@@ -103,6 +110,8 @@ export function parseAppData(raw: unknown): AppData | null {
 export type Action =
   | { type: 'set-price'; itemId: number; value: number | null; now: number }
   | { type: 'import-prices'; entries: ReadonlyArray<readonly [number, number]>; now: number }
+  | { type: 'set-stock'; itemId: number; quantity: number | null }
+  | { type: 'clear-stock' }
   | { type: 'switch-profile'; profileId: string }
   | { type: 'add-profile'; id: string; name: string }
   | { type: 'rename-profile'; profileId: string; name: string }
@@ -117,6 +126,9 @@ export type Action =
 
 const activePrices = (data: AppData): Record<string, PriceEntry> =>
   data.prices[data.activeProfileId] ?? {};
+
+const activeStock = (data: AppData): Record<string, number> =>
+  data.inventory[data.activeProfileId] ?? {};
 
 const activeSales = (data: AppData): Sale[] => data.sales[data.activeProfileId] ?? [];
 
@@ -135,6 +147,15 @@ export function reduce(data: AppData, action: Action): AppData {
       }
       return { ...data, prices: { ...data.prices, [data.activeProfileId]: prices } };
     }
+    case 'set-stock': {
+      const stock = { ...activeStock(data) };
+      // 0 comme absence : ne pas encombrer le stock de lignes vides
+      if (action.quantity === null || action.quantity <= 0) delete stock[String(action.itemId)];
+      else stock[String(action.itemId)] = action.quantity;
+      return { ...data, inventory: { ...data.inventory, [data.activeProfileId]: stock } };
+    }
+    case 'clear-stock':
+      return { ...data, inventory: { ...data.inventory, [data.activeProfileId]: {} } };
     case 'switch-profile': {
       if (!data.profiles.some(profile => profile.id === action.profileId)) return data;
       return { ...data, activeProfileId: action.profileId };
@@ -146,6 +167,7 @@ export function reduce(data: AppData, action: Action): AppData {
         ...data,
         profiles: [...data.profiles, { id: action.id, name }],
         prices: { ...data.prices, [action.id]: {} },
+        inventory: { ...data.inventory, [action.id]: {} },
         sales: { ...data.sales, [action.id]: [] },
         activeProfileId: action.id,
       };
@@ -165,11 +187,13 @@ export function reduce(data: AppData, action: Action): AppData {
       const profiles = data.profiles.filter(profile => profile.id !== action.profileId);
       if (profiles.length === data.profiles.length) return data;
       const { [action.profileId]: _prices, ...prices } = data.prices;
+      const { [action.profileId]: _stock, ...inventory } = data.inventory;
       const { [action.profileId]: _sales, ...sales } = data.sales;
       return {
         ...data,
         profiles,
         prices,
+        inventory,
         sales,
         activeProfileId:
           data.activeProfileId === action.profileId ? profiles[0]!.id : data.activeProfileId,
@@ -247,6 +271,15 @@ export function priceEntriesOf(data: AppData): Map<number, PriceEntry> {
     entries.set(Number(itemId), entry);
   }
   return entries;
+}
+
+/** Stock du profil actif au format moteur (Map id → quantité possédée). */
+export function inventoryOf(data: AppData): Map<number, number> {
+  const stock = new Map<number, number>();
+  for (const [itemId, quantity] of Object.entries(activeStock(data))) {
+    stock.set(Number(itemId), quantity);
+  }
+  return stock;
 }
 
 export function salesOf(data: AppData): Sale[] {
