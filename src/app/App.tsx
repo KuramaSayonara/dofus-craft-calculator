@@ -18,6 +18,7 @@ import {
   priceEntriesOf,
   reduce,
   salesOf,
+  volumesOf,
   type SavedCraft,
 } from './state.ts';
 import { loadPersisted, persist, type StorageBackend } from './storage.ts';
@@ -95,6 +96,7 @@ export function App() {
   const prices = useMemo(() => priceBookOf(data), [data]);
   const priceEntries = useMemo(() => priceEntriesOf(data), [data]);
   const inventory = useMemo(() => inventoryOf(data), [data]);
+  const volumes = useMemo(() => volumesOf(data), [data]);
   const sales = salesOf(data);
   const listedCount = sales.filter(sale => sale.status === 'listed').length;
 
@@ -256,6 +258,10 @@ export function App() {
               onPriceChange={setPrice}
               inventory={inventory}
               onStockChange={setStock}
+              volume={volumes.get(selected.id)}
+              onVolumeChange={(window, value) =>
+                dispatch({ type: 'set-volume', itemId: selected.id, window, value })
+              }
               modes={modes}
               onModeChange={setMode}
               quantity={quantity}

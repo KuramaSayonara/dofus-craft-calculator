@@ -3,9 +3,11 @@ import {
   analyzeCraftCost,
   buildShoppingList,
   formatKamas,
+  netAfterTax,
   type Inventory,
   type PriceBook,
   type RecipeGraph,
+  type SalesVolume,
   type SourcingMode,
 } from '../../engine/index.ts';
 import type { QuestNeedsFile, RecipesFile, SearchEntry } from '../data.ts';
@@ -15,6 +17,7 @@ import { ItemIcon } from './ItemIcon.tsx';
 import { ProfitPanel } from './ProfitPanel.tsx';
 import { QuestDemandSection } from './QuestDemandSection.tsx';
 import { ShoppingSection } from './ShoppingSection.tsx';
+import { VolumeSection } from './VolumeSection.tsx';
 
 interface CraftSheetProps {
   entry: SearchEntry;
@@ -28,6 +31,8 @@ interface CraftSheetProps {
   onPriceChange: (itemId: number, value: number | null) => void;
   inventory: Inventory;
   onStockChange: (itemId: number, quantity: number | null) => void;
+  volume: SalesVolume | undefined;
+  onVolumeChange: (window: 'd1' | 'd7' | 'd30', value: number | null) => void;
   modes: ReadonlyMap<number, SourcingMode>;
   onModeChange: (itemId: number, mode: SourcingMode) => void;
   quantity: number;
@@ -53,6 +58,8 @@ export function CraftSheet(props: CraftSheetProps) {
     onPriceChange,
     inventory,
     onStockChange,
+    volume,
+    onVolumeChange,
     modes,
     onModeChange,
     quantity,
@@ -76,6 +83,7 @@ export function CraftSheet(props: CraftSheetProps) {
     [root, quantity, prices, inventory],
   );
   const usesStock = list.lines.some(line => line.fromStock > 0);
+  const marketPrice = prices.get(entry.id) ?? null;
 
   const recipe = graph.get(entry.id);
   if (recipe === undefined || root.children.length === 0) {
@@ -252,10 +260,21 @@ export function CraftSheet(props: CraftSheetProps) {
         itemName={entry.n}
       />
 
+      <VolumeSection
+        volume={volume}
+        onChange={onVolumeChange}
+        quantity={quantity}
+        unitProfit={
+          root.craftUnitCost !== null && marketPrice !== null
+            ? netAfterTax(marketPrice, taxRate) - root.craftUnitCost
+            : null
+        }
+      />
+
       <ProfitPanel
         craftCost={root.craftUnitCost}
         quantity={quantity}
-        marketPrice={prices.get(entry.id) ?? null}
+        marketPrice={marketPrice}
         onMarketPriceChange={value => onPriceChange(entry.id, value)}
         taxRate={taxRate}
         marginalThresholdPct={marginalThresholdPct}
