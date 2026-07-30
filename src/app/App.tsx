@@ -18,11 +18,13 @@ import { PricesView } from './components/PricesView.tsx';
 import { SalesView } from './components/SalesView.tsx';
 import { SavesView } from './components/SavesView.tsx';
 import { SearchBox } from './components/SearchBox.tsx';
+import { TopCraftsView } from './components/TopCraftsView.tsx';
 
-type View = 'craft' | 'prices' | 'saves' | 'sales';
+type View = 'craft' | 'top' | 'prices' | 'saves' | 'sales';
 
 const VIEW_LABELS: Record<View, string> = {
   craft: 'Craft',
+  top: 'Top crafts',
   prices: 'Prix',
   saves: 'Sauvegardes',
   sales: 'Ventes',
@@ -126,6 +128,17 @@ export function App() {
     setView('craft');
   };
 
+  /** ouvre la fiche d'un objet depuis le tableau de bord */
+  const openItem = (itemId: number) => {
+    const entry = entryById.get(itemId);
+    if (entry === undefined) return;
+    setSelected(entry);
+    setQuantity(1);
+    setModes(new Map());
+    setEditingSave(null);
+    setView('craft');
+  };
+
   const listSale = (unitCost: number) => {
     if (selected === null) return;
     dispatch({
@@ -204,9 +217,11 @@ export function App() {
         <div className="space-y-5">
           <SearchBox
             index={prepared}
+            jobs={recipesFile.jobs}
             onSelect={entry => {
               setSelected(entry);
               setQuantity(1);
+              setModes(new Map());
               setEditingSave(null);
             }}
           />
@@ -238,6 +253,16 @@ export function App() {
             </p>
           )}
         </div>
+      ) : view === 'top' ? (
+        <TopCraftsView
+          graph={graph}
+          prices={prices}
+          entryById={entryById}
+          jobs={recipesFile.jobs}
+          taxRate={data.settings.taxRate}
+          marginalThresholdPct={data.settings.marginalThresholdPct}
+          onOpenItem={openItem}
+        />
       ) : view === 'prices' ? (
         <PricesView
           data={data}
