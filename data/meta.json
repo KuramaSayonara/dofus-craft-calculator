@@ -42,6 +42,8 @@
       "Chasseur": 48,
       "Mineur": 41,
       "Bûcheron": 32
-    }
+    },
+    "questDemandedItems": 922,
+    "questDemandedCraftables": 233
   }
 }
