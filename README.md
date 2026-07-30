@@ -1,31 +1,143 @@
 # Calculateur de rentabilité de craft — Dofus 3
 
-> **Projet en construction** (Phase 1 : pipeline de données terminé, interface à venir).
-> Voir [SPEC.md](SPEC.md) pour la vision complète et [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md)
-> pour l'étude des sources de données.
+Site statique pour savoir si un craft est rentable : tu choisis un objet, tu renseignes le prix
+des ressources, l'outil te donne le coût de revient, le **prix de vente minimum pour être à
+l'équilibre** et un verdict rentable / marginal / à perte.
 
-Site statique de calcul de rentabilité de craft pour Dofus 3 : choisir un objet,
-renseigner le prix des ressources, obtenir le coût de craft, le seuil de
-rentabilité et le verdict rentable / à perte.
+Deux partis pris qui le distinguent des outils existants :
 
-## Données
+- **100 % des objets craftables du jeu** — 4 847 recettes, aucune liste écrite à la main.
+- **Données à jour automatiquement** — un robot vérifie chaque semaine si Ankama a mis le jeu à
+  jour et propose les changements dans une Pull Request.
 
-- `data/` est généré automatiquement par `npm run ingest` (jamais édité à la main) :
-  17 041 objets, 4 847 recettes avec métier, régénérables à tout moment.
-- Un workflow GitHub Actions ([update-data](.github/workflows/update-data.yml)) tourne
-  chaque semaine et ouvre une Pull Request si le jeu a été mis à jour.
+## Fonctionnalités
 
-## Développement
+| | |
+|---|---|
+| **Recherche** | Insensible aux accents et à la casse (« epee boisaille » trouve « Épée de Boisaille »), filtres cumulables par type, niveau, métier ; navigable entièrement au clavier. |
+| **Craft récursif** | Les ingrédients eux-mêmes craftables se déplient en arbre. Pour chacun : Acheter, Crafter, ou Automatique (le moins cher). Détection des cycles, profondeur limitée, prix manquants signalés — jamais traités comme zéro. |
+| **Rentabilité** | Taxe de l'hôtel de vente paramétrable, seuil de rentabilité exact au kama, comparaison prix marché / ton prix, profit par craft et pour la quantité voulue. |
+| **Carnet de prix** | Profils multi-serveurs, horodatage et pastilles de fraîcheur, saisie par lot ×1/×10/×100, import en masse `nom;prix`, export/import JSON. |
+| **Liste de courses** | Ressources de base agrégées après résolution de l'arbre, cases à cocher, export texte. |
+| **Suivi** | Crafts sauvegardés en dossiers ; ventes en cours à coût figé ; historique avec profit réel, marge moyenne et classement. |
+| **Top crafts** | Balayage de tous les crafts du jeu avec tes prix, trié par marge, plus les crafts « presque calculables » et le nombre de prix qui manquent. |
+
+## Les prix ne sont pas fournis (et c'est volontaire)
+
+Il n'existe aucune source publique et fiable des prix de l'hôtel de vente : ils dépendent du
+serveur et changent en permanence. Le site n'invente donc **aucun** prix — un prix faux serait
+pire que pas de prix. Tu saisis les tiens ; ils restent **sur ton appareil** (IndexedDB, avec
+localStorage en repli) et ne sont envoyés nulle part.
+
+## Lancer le projet
 
 ```bash
 npm install
-npm run ingest      # régénère data/ depuis les APIs
-npm run check       # vérification TypeScript
 ```
 
-## Mentions
+```bash
+npm run dev
+```
 
-Projet **non officiel**, non affilié à Ankama. Dofus est une marque d'Ankama Games.
+Autres commandes :
 
-- Données d'objets, recettes et images : [DofusDude](https://docs.dofusdu.de) (`api.dofusdu.de`)
-- Métiers des recettes : Data sourced from [DofusDB](https://dofusdb.fr) (`api.dofusdb.fr`)
+| Commande | Effet |
+|---|---|
+| `npm run build` | Construit le site dans `dist/` (données de jeu incluses). |
+| `npm test` | Tests unitaires du moteur de calcul (Vitest). |
+| `npm run check` | Vérification TypeScript stricte. |
+| `npm run ingest` | Régénère `data/` depuis les APIs (voir ci-dessous). |
+
+## Régénérer les données du jeu
+
+```bash
+npm run ingest
+```
+
+Le script télécharge tous les objets, valide chaque enregistrement, contrôle l'intégrité du
+graphe de recettes, puis réécrit `data/`. Il est **idempotent** : relancé sans changement côté
+API, il produit des fichiers identiques.
+
+Il **échoue volontairement** (code de sortie ≠ 0) si le résultat est aberrant : catégorie vide,
+ingrédient orphelin, ou dataset plus petit qu'au run précédent. Si une baisse est légitime
+(retrait de contenu par Ankama), relancer avec `ALLOW_SHRINK=1`.
+
+Fichiers produits — jamais édités à la main :
+
+| Fichier | Contenu |
+|---|---|
+| `data/items.json` | Tous les objets (nom, niveau, type, catégorie, icône). |
+| `data/recipes.json` | Recettes, métier et niveau de craft. |
+| `data/search-index.json` | Index léger chargé en premier pour une recherche instantanée. |
+| `data/meta.json` | Version du jeu et comptages (sert de garde-fou au run suivant). |
+
+## Mise à jour automatique
+
+Deux workflows GitHub Actions :
+
+- **[`update-data`](.github/workflows/update-data.yml)** — chaque lundi matin (et à la demande) :
+  relance l'ingestion et, si quelque chose a changé, **ouvre une Pull Request** avec un résumé
+  lisible (objets ajoutés / modifiés / supprimés). Jamais de push direct sur `main`.
+- **[`deploy`](.github/workflows/deploy.yml)** — à chaque push sur `main` : vérifie les types,
+  lance les tests, construit le site et le publie sur GitHub Pages.
+
+## Déployer
+
+Le site est entièrement statique : pas de serveur, pas de base de données, pas de clé API.
+
+1. Créer un dépôt GitHub et y pousser le projet :
+
+```bash
+git remote add origin https://github.com/<utilisateur>/<depot>.git
+```
+
+```bash
+git push -u origin main
+```
+
+2. Dans les réglages du dépôt, section **Pages**, choisir **GitHub Actions** comme source.
+3. Le workflow `deploy` publie le site à chaque push sur `main`.
+
+Le site utilise des chemins relatifs : il fonctionne aussi bien à la racine d'un domaine que
+sous un sous-chemin `https://<utilisateur>.github.io/<depot>/`.
+
+## Architecture
+
+```
+scripts/ingest.ts     Ingestion hors navigateur (Node + Zod)
+      ↓
+data/*.json           Dataset committé dans le dépôt
+      ↓
+src/engine/           Moteur de calcul : TypeScript pur, sans React, testé
+      ↓
+src/app/              Interface React (aucun calcul métier dans les composants)
+```
+
+Le moteur (`src/engine/`) est constitué de fonctions sans effet de bord prenant en entrée le
+graphe de recettes et le carnet de prix. Il est testé en priorité sur les cas piégeux : cycles
+dans les recettes, imbrication profonde, prix inconnus, arbitrage acheter/crafter, arrondis en
+kamas (arithmétique entière, aucune dérive de virgule flottante).
+
+## Conventions de calcul
+
+Deux règles ont été choisies faute de documentation officielle, et sont documentées ici parce
+qu'elles peuvent produire un écart de 1 kama :
+
+- **Taxe de l'hôtel de vente** : arrondie au kama **inférieur**.
+- **Prix unitaire depuis un lot** (×10 / ×100) : arrondi au kama **supérieur**, pour ne jamais
+  sous-estimer un coût de craft.
+
+Le taux de taxe par défaut (2 %) et le seuil de marge « marginal » (10 %) sont modifiables dans
+l'onglet Prix.
+
+## Mentions légales et sources
+
+Projet **non officiel**, **non affilié à Ankama**. Dofus est une marque déposée d'Ankama Games.
+Les données et les illustrations du jeu appartiennent à Ankama.
+
+- Objets, recettes et images : **[DofusDude](https://docs.dofusdu.de)** (`api.dofusdu.de`)
+- Métiers des recettes : **Data sourced from [DofusDB](https://dofusdb.fr)** (`api.dofusdb.fr`) —
+  usage non commercial
+
+L'étude comparative des sources de données est dans
+[`docs/DATA-SOURCES.md`](docs/DATA-SOURCES.md).
