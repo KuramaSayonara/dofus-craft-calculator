@@ -8,17 +8,20 @@ import {
   type RecipeGraph,
   type SourcingMode,
 } from '../../engine/index.ts';
-import type { RecipesFile, SearchEntry } from '../data.ts';
+import type { QuestNeedsFile, RecipesFile, SearchEntry } from '../data.ts';
 import type { PriceEntry } from '../state.ts';
 import { CraftTree } from './CraftTree.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 import { ProfitPanel } from './ProfitPanel.tsx';
+import { QuestDemandSection } from './QuestDemandSection.tsx';
 import { ShoppingSection } from './ShoppingSection.tsx';
 
 interface CraftSheetProps {
   entry: SearchEntry;
   graph: RecipeGraph;
   jobs: RecipesFile['jobs'];
+  /** besoins de quête (null tant que le fichier n'est pas chargé) */
+  questNeeds: QuestNeedsFile | null;
   entryById: ReadonlyMap<number, SearchEntry>;
   prices: PriceBook;
   priceEntries: ReadonlyMap<number, PriceEntry>;
@@ -43,6 +46,7 @@ export function CraftSheet(props: CraftSheetProps) {
     entry,
     graph,
     jobs,
+    questNeeds,
     entryById,
     prices,
     priceEntries,
@@ -86,10 +90,10 @@ export function CraftSheet(props: CraftSheetProps) {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <ItemIcon icon={entry.i} size={10} />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold">{entry.n}</h2>
+        <div className="min-w-0 flex-1 basis-48">
+          <h2 className="text-lg font-semibold">{entry.n}</h2>
           <p className="text-sm text-zinc-400">
             {entry.t} · niv. {entry.l}
             {jobName !== null && (
@@ -100,7 +104,7 @@ export function CraftSheet(props: CraftSheetProps) {
             )}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-zinc-400">
+        <label className="ml-auto flex items-center gap-2 text-sm text-zinc-400">
           Quantité
           <input
             type="number"
@@ -116,6 +120,15 @@ export function CraftSheet(props: CraftSheetProps) {
           />
         </label>
       </header>
+
+      {questNeeds !== null && questNeeds.needs[String(entry.id)] !== undefined && (
+        <QuestDemandSection
+          needs={questNeeds.needs[String(entry.id)]!}
+          categories={questNeeds.categories}
+          quantity={quantity}
+          onQuantityChange={onQuantityChange}
+        />
+      )}
 
       <section className="rounded-lg border border-zinc-800">
         <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2 text-xs uppercase tracking-wide text-zinc-500">

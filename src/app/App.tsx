@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { graphFromRecipesFile, netAfterTax, type SourcingMode } from '../engine/index.ts';
-import { loadRecipes, loadSearchIndex, type RecipesFile, type SearchEntry } from './data.ts';
+import {
+  loadQuestNeeds,
+  loadRecipes,
+  loadSearchIndex,
+  type QuestNeedsFile,
+  type RecipesFile,
+  type SearchEntry,
+} from './data.ts';
 import { prepareIndex } from './search.ts';
 import {
   defaultAppData,
@@ -35,6 +42,7 @@ export function App() {
   // données de jeu (statiques)
   const [index, setIndex] = useState<SearchEntry[] | null>(null);
   const [recipesFile, setRecipesFile] = useState<RecipesFile | null>(null);
+  const [questNeeds, setQuestNeeds] = useState<QuestNeedsFile | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // état persisté
@@ -52,6 +60,10 @@ export function App() {
   useEffect(() => {
     loadSearchIndex().then(setIndex).catch((error: unknown) => setLoadError(String(error)));
     loadRecipes().then(setRecipesFile).catch((error: unknown) => setLoadError(String(error)));
+    // les besoins de quête sont un bonus : leur absence ne bloque pas l'app
+    loadQuestNeeds()
+      .then(setQuestNeeds)
+      .catch(() => setQuestNeeds(null));
     loadPersisted()
       .then(result => {
         if (result !== null) {
@@ -237,6 +249,7 @@ export function App() {
               entry={selected}
               graph={graph}
               jobs={recipesFile.jobs}
+              questNeeds={questNeeds}
               entryById={entryById}
               prices={prices}
               priceEntries={priceEntries}

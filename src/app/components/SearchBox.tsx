@@ -26,6 +26,7 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
   const [levelMin, setLevelMin] = useState('');
   const [levelMax, setLevelMax] = useState('');
   const [jobId, setJobId] = useState('');
+  const [questOnly, setQuestOnly] = useState(false);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,11 +46,16 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
       ...(min !== undefined && Number.isFinite(min) ? { levelMin: min } : {}),
       ...(max !== undefined && Number.isFinite(max) ? { levelMax: max } : {}),
       ...(jobId !== '' ? { jobId: Number(jobId) } : {}),
+      ...(questOnly ? { questDemandedOnly: true } : {}),
     };
-  }, [craftableOnly, type, levelMin, levelMax, jobId]);
+  }, [craftableOnly, type, levelMin, levelMax, jobId, questOnly]);
 
   const activeFilterCount =
-    (type !== '' ? 1 : 0) + (levelMin !== '' ? 1 : 0) + (levelMax !== '' ? 1 : 0) + (jobId !== '' ? 1 : 0);
+    (type !== '' ? 1 : 0) +
+    (levelMin !== '' ? 1 : 0) +
+    (levelMax !== '' ? 1 : 0) +
+    (jobId !== '' ? 1 : 0) +
+    (questOnly ? 1 : 0);
 
   const results = useMemo(() => searchItems(index, query, options), [index, query, options]);
 
@@ -122,6 +128,18 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
               className="h-4 w-4 accent-amber-500"
             />
             Craftables uniquement
+          </label>
+          <label className="flex items-center gap-2 text-zinc-400">
+            <input
+              type="checkbox"
+              checked={questOnly}
+              onChange={event => {
+                setQuestOnly(event.target.checked);
+                setOpen(true);
+              }}
+              className="h-4 w-4 accent-violet-500"
+            />
+            📜 Demandé par une quête
           </label>
           <label className="flex items-center gap-2 text-zinc-400">
             Type
@@ -217,8 +235,20 @@ export function SearchBox({ index, jobs, onSelect }: SearchBoxProps) {
             >
               <ItemIcon icon={entry.i} />
               <span className="min-w-0 flex-1 truncate">{entry.n}</span>
+              {entry.qn !== undefined && (
+                <span
+                  title={`Réclamé par une quête, ${entry.qn} exemplaire${entry.qn > 1 ? 's' : ''}`}
+                  className="shrink-0 rounded bg-violet-500/20 px-1.5 py-0.5 text-xs tabular-nums text-violet-300"
+                >
+                  📜 ×{entry.qn}
+                </span>
+              )}
+              {/* sur téléphone, seul le niveau tient à côté du nom */}
               <span className="shrink-0 text-xs text-zinc-400">
-                {CATEGORY_LABELS[entry.c]} · {entry.t} · niv. {entry.l}
+                <span className="hidden sm:inline">
+                  {CATEGORY_LABELS[entry.c]} · {entry.t} ·{' '}
+                </span>
+                niv. {entry.l}
                 {entry.r === 1 ? '' : ' · non craftable'}
               </span>
             </li>

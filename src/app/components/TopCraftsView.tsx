@@ -173,7 +173,17 @@ export function TopCraftsView(props: TopCraftsViewProps) {
                     </td>
                     <td className="px-3 py-1">
                       <span className="block max-w-56 truncate">{entry?.n ?? `Objet ${row.itemId}`}</span>
-                      <span className="text-xs text-zinc-500">niv. {entry?.l ?? '?'}</span>
+                      <span className="text-xs text-zinc-500">
+                        niv. {entry?.l ?? '?'}
+                        {entry?.qn !== undefined && (
+                          <span
+                            title={`Réclamé par une quête, ${entry.qn} exemplaire${entry.qn > 1 ? 's' : ''}`}
+                            className="ml-1 rounded bg-violet-500/20 px-1 tabular-nums text-violet-300"
+                          >
+                            📜 ×{entry.qn}
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-3 py-1 text-zinc-400">
                       {row.jobId !== null ? (jobs[String(row.jobId)] ?? '?') : '—'}
