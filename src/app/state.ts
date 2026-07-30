@@ -5,7 +5,7 @@
 // créateurs d'action, jamais de l'intérieur.
 
 import { z } from 'zod';
-import type { SourcingMode } from '../engine/index.ts';
+import type { SalesVolume, SourcingMode } from '../engine/index.ts';
 
 // ---------------------------------------------------------------------------
 // Schémas et types
@@ -72,6 +72,23 @@ export const appDataSchema = z.object({
    * données enregistrées avant l'arrivée du stock.
    */
   inventory: z.record(z.string(), z.record(z.string(), z.number().int().min(0))).default({}),
+  /**
+   * profileId → (itemId → exemplaires vus vendus sur 24 h / 7 j / 30 j).
+   * Observation manuelle et facultative : rien d'autre n'en dépend.
+   */
+  volumes: z
+    .record(
+      z.string(),
+      z.record(
+        z.string(),
+        z.object({
+          d1: z.number().int().min(0).optional(),
+          d7: z.number().int().min(0).optional(),
+          d30: z.number().int().min(0).optional(),
+        }),
+      ),
+    )
+    .default({}),
   savedCrafts: z.array(savedCraftSchema),
   /** profileId → ventes (les kamas sont propres à un serveur) */
   sales: z.record(z.string(), z.array(saleSchema)),
@@ -87,6 +104,7 @@ export function defaultAppData(): AppData {
     profiles: [{ id, name: 'Mon serveur' }],
     prices: { [id]: {} },
     inventory: { [id]: {} },
+    volumes: { [id]: {} },
     savedCrafts: [],
     sales: { [id]: [] },
     settings: { taxRate: 0.02, marginalThresholdPct: 10 },
@@ -112,6 +130,7 @@ export type Action =
   | { type: 'import-prices'; entries: ReadonlyArray<readonly [number, number]>; now: number }
   | { type: 'set-stock'; itemId: number; quantity: number | null }
   | { type: 'clear-stock' }
+  | { type: 'set-volume'; itemId: number; window: 'd1' | 'd7' | 'd30'; value: number | null }
   | { type: 'switch-profile'; profileId: string }
   | { type: 'add-profile'; id: string; name: string }
   | { type: 'rename-profile'; profileId: string; name: string }
@@ -129,6 +148,9 @@ const activePrices = (data: AppData): Record<string, PriceEntry> =>
 
 const activeStock = (data: AppData): Record<string, number> =>
   data.inventory[data.activeProfileId] ?? {};
+
+const activeVolumes = (data: AppData): Record<string, SalesVolume> =>
+  data.volumes[data.activeProfileId] ?? {};
 
 const activeSales = (data: AppData): Sale[] => data.sales[data.activeProfileId] ?? [];
 
@@ -156,6 +178,17 @@ export function reduce(data: AppData, action: Action): AppData {
     }
     case 'clear-stock':
       return { ...data, inventory: { ...data.inventory, [data.activeProfileId]: {} } };
+    case 'set-volume': {
+      const volumes = { ...activeVolumes(data) };
+      const key = String(action.itemId);
+      const current = { ...(volumes[key] ?? {}) };
+      if (action.value === null || action.value < 0) delete current[action.window];
+      else current[action.window] = action.value;
+      // plus aucune observation pour cet objet → on retire la ligne
+      if (Object.keys(current).length === 0) delete volumes[key];
+      else volumes[key] = current;
+      return { ...data, volumes: { ...data.volumes, [data.activeProfileId]: volumes } };
+    }
     case 'switch-profile': {
       if (!data.profiles.some(profile => profile.id === action.profileId)) return data;
       return { ...data, activeProfileId: action.profileId };
@@ -168,6 +201,7 @@ export function reduce(data: AppData, action: Action): AppData {
         profiles: [...data.profiles, { id: action.id, name }],
         prices: { ...data.prices, [action.id]: {} },
         inventory: { ...data.inventory, [action.id]: {} },
+        volumes: { ...data.volumes, [action.id]: {} },
         sales: { ...data.sales, [action.id]: [] },
         activeProfileId: action.id,
       };
@@ -188,12 +222,14 @@ export function reduce(data: AppData, action: Action): AppData {
       if (profiles.length === data.profiles.length) return data;
       const { [action.profileId]: _prices, ...prices } = data.prices;
       const { [action.profileId]: _stock, ...inventory } = data.inventory;
+      const { [action.profileId]: _volumes, ...volumes } = data.volumes;
       const { [action.profileId]: _sales, ...sales } = data.sales;
       return {
         ...data,
         profiles,
         prices,
         inventory,
+        volumes,
         sales,
         activeProfileId:
           data.activeProfileId === action.profileId ? profiles[0]!.id : data.activeProfileId,
@@ -280,6 +316,15 @@ export function inventoryOf(data: AppData): Map<number, number> {
     stock.set(Number(itemId), quantity);
   }
   return stock;
+}
+
+/** Ventes observées du profil actif (Map id → fenêtres renseignées). */
+export function volumesOf(data: AppData): Map<number, SalesVolume> {
+  const volumes = new Map<number, SalesVolume>();
+  for (const [itemId, volume] of Object.entries(activeVolumes(data))) {
+    volumes.set(Number(itemId), volume);
+  }
+  return volumes;
 }
 
 export function salesOf(data: AppData): Sale[] {
