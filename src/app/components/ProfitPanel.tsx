@@ -3,13 +3,14 @@ import {
   breakEvenPrice,
   evaluateSale,
   formatKamas,
+  netAfterTax,
   type SaleEvaluation,
   type Verdict,
 } from '../../engine/index.ts';
 import { PriceInput } from './PriceInput.tsx';
 
 interface ProfitPanelProps {
-  /** coût de craft d'UNE unité (null = prix manquants) */
+  /** coût de revient d'UNE unité, stock valorisé au marché (null = prix manquants) */
   craftCost: number | null;
   quantity: number;
   /** prix marché constaté (partagé avec le carnet de prix) */
@@ -17,6 +18,8 @@ interface ProfitPanelProps {
   onMarketPriceChange: (value: number | null) => void;
   taxRate: number;
   marginalThresholdPct: number;
+  /** présent seulement si du stock possédé couvre une partie des ressources */
+  stock: { cashTotal: number; stockValue: number } | null;
 }
 
 const VERDICTS: Record<Verdict, { label: string; cls: string }> = {
@@ -71,7 +74,8 @@ export function SaleColumn({ title, sale, quantity }: { title: string; sale: Sal
 
 /** Rentabilité : seuil d'équilibre, comparaison prix marché / prix envisagé. */
 export function ProfitPanel(props: ProfitPanelProps) {
-  const { craftCost, quantity, marketPrice, onMarketPriceChange, taxRate, marginalThresholdPct } = props;
+  const { craftCost, quantity, marketPrice, onMarketPriceChange, taxRate, marginalThresholdPct, stock } =
+    props;
   const [myPrice, setMyPrice] = useState<number | null>(null);
 
   if (craftCost === null) {
@@ -85,6 +89,13 @@ export function ProfitPanel(props: ProfitPanelProps) {
 
   const breakEven = breakEvenPrice(craftCost, taxRate);
 
+  // Vue « trésorerie » : ce qui sort réellement de ta bourse une fois le stock
+  // déduit. Le coût unitaire est arrondi au kama supérieur pour ne jamais
+  // annoncer un seuil trop optimiste.
+  const cashUnitCost =
+    stock !== null && quantity > 0 ? Math.ceil(stock.cashTotal / quantity) : null;
+  const cashBreakEven = cashUnitCost !== null ? breakEvenPrice(cashUnitCost, taxRate) : null;
+
   return (
     <section className="space-y-3 rounded-lg border border-zinc-800 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -97,7 +108,47 @@ export function ProfitPanel(props: ProfitPanelProps) {
       <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm">
         <span className="text-zinc-300">Prix de vente minimum pour être à l'équilibre : </span>
         <strong className="tabular-nums text-amber-400">{formatKamas(breakEven)} K</strong>
+        {stock !== null && (
+          <span className="block text-xs text-zinc-500">
+            coût de revient complet, ton stock compté à sa valeur marchande
+          </span>
+        )}
       </p>
+
+      {stock !== null && cashBreakEven !== null && (
+        <div className="space-y-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-sm">
+          <p className="font-medium text-sky-300">📦 En comptant ton stock</p>
+          <div className="flex justify-between text-zinc-300">
+            <span>Kamas à sortir pour {quantity} craft{quantity > 1 ? 's' : ''}</span>
+            <span className="tabular-nums">{formatKamas(stock.cashTotal)} K</span>
+          </div>
+          <div className="flex justify-between text-zinc-300">
+            <span>Prix de vente pour rentrer dans tes frais</span>
+            <span className="tabular-nums text-sky-300">{formatKamas(cashBreakEven)} K</span>
+          </div>
+          {marketPrice !== null &&
+            (() => {
+              const gain = netAfterTax(marketPrice, taxRate) * quantity - stock.cashTotal;
+              return (
+                <div className="flex justify-between font-medium">
+                  <span className="text-zinc-300">
+                    Kamas en poche si tu vends {quantity > 1 ? `les ${quantity} ` : ''}à{' '}
+                    {formatKamas(marketPrice)} K
+                  </span>
+                  <span className={`tabular-nums ${gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {gain >= 0 ? '+' : ''}
+                    {formatKamas(gain)} K
+                  </span>
+                </div>
+              );
+            })()}
+          <p className="text-xs text-zinc-500">
+            Tu possèdes déjà pour {formatKamas(stock.stockValue)} K de ressources. Attention : les
+            revendre telles quelles rapporterait aussi des kamas — le seuil du dessus reste le vrai
+            juge de la rentabilité.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         <label className="flex items-center gap-2 text-zinc-400">

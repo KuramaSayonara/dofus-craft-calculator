@@ -4,6 +4,7 @@ import type { SearchEntry } from '../data.ts';
 import type { PriceEntry } from '../state.ts';
 import { ItemIcon } from './ItemIcon.tsx';
 import { PriceInput } from './PriceInput.tsx';
+import { StockInput } from './StockInput.tsx';
 
 interface CraftTreeProps {
   root: CostNode;
@@ -12,9 +13,12 @@ interface CraftTreeProps {
   entryById: ReadonlyMap<number, SearchEntry>;
   /** entrées de prix horodatées (pastilles de fraîcheur) */
   priceEntries: ReadonlyMap<number, PriceEntry>;
+  /** quantités déjà possédées */
+  inventory: ReadonlyMap<number, number>;
   modes: ReadonlyMap<number, SourcingMode>;
   onModeChange: (itemId: number, mode: SourcingMode) => void;
   onPriceChange: (itemId: number, value: number | null) => void;
+  onStockChange: (itemId: number, quantity: number | null) => void;
 }
 
 const MODE_OPTIONS: ReadonlyArray<readonly [SourcingMode, string]> = [
@@ -77,7 +81,17 @@ const SOURCE_LABELS: Record<CostNode['source'], string> = {
 
 /** Arbre de craft dépliable avec arbitrage acheter / crafter par ingrédient. */
 export function CraftTree(props: CraftTreeProps) {
-  const { root, quantity, entryById, priceEntries, modes, onModeChange, onPriceChange } = props;
+  const {
+    root,
+    quantity,
+    entryById,
+    priceEntries,
+    inventory,
+    modes,
+    onModeChange,
+    onPriceChange,
+    onStockChange,
+  } = props;
   // état d'expansion par chemin (un même objet peut apparaître dans
   // plusieurs branches et se déplier indépendamment)
   const [expanded, setExpanded] = useState<ReadonlyMap<string, boolean>>(new Map());
@@ -148,6 +162,12 @@ export function CraftTree(props: CraftTreeProps) {
                 onChange={mode => onModeChange(node.itemId, mode)}
               />
             )}
+            <StockInput
+              value={inventory.get(node.itemId) ?? 0}
+              onChange={stock => onStockChange(node.itemId, stock)}
+              itemName={name}
+              needed={neededQty}
+            />
             <PriceInput
               value={node.buyUnitPrice}
               onChange={value => onPriceChange(node.itemId, value)}

@@ -4,6 +4,7 @@ import { loadRecipes, loadSearchIndex, type RecipesFile, type SearchEntry } from
 import { prepareIndex } from './search.ts';
 import {
   defaultAppData,
+  inventoryOf,
   modesOfSavedCraft,
   parseAppData,
   priceBookOf,
@@ -81,11 +82,15 @@ export function App() {
   );
   const prices = useMemo(() => priceBookOf(data), [data]);
   const priceEntries = useMemo(() => priceEntriesOf(data), [data]);
+  const inventory = useMemo(() => inventoryOf(data), [data]);
   const sales = salesOf(data);
   const listedCount = sales.filter(sale => sale.status === 'listed').length;
 
   const setPrice = (itemId: number, value: number | null) =>
     dispatch({ type: 'set-price', itemId, value, now: Date.now() });
+
+  const setStock = (itemId: number, quantity: number | null) =>
+    dispatch({ type: 'set-stock', itemId, quantity });
 
   const setMode = (itemId: number, mode: SourcingMode) => {
     setModes(previous => {
@@ -236,6 +241,8 @@ export function App() {
               prices={prices}
               priceEntries={priceEntries}
               onPriceChange={setPrice}
+              inventory={inventory}
+              onStockChange={setStock}
               modes={modes}
               onModeChange={setMode}
               quantity={quantity}

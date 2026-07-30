@@ -3,6 +3,7 @@ import {
   analyzeCraftCost,
   buildShoppingList,
   formatKamas,
+  type Inventory,
   type PriceBook,
   type RecipeGraph,
   type SourcingMode,
@@ -22,6 +23,8 @@ interface CraftSheetProps {
   prices: PriceBook;
   priceEntries: ReadonlyMap<number, PriceEntry>;
   onPriceChange: (itemId: number, value: number | null) => void;
+  inventory: Inventory;
+  onStockChange: (itemId: number, quantity: number | null) => void;
   modes: ReadonlyMap<number, SourcingMode>;
   onModeChange: (itemId: number, mode: SourcingMode) => void;
   quantity: number;
@@ -44,6 +47,8 @@ export function CraftSheet(props: CraftSheetProps) {
     prices,
     priceEntries,
     onPriceChange,
+    inventory,
+    onStockChange,
     modes,
     onModeChange,
     quantity,
@@ -62,7 +67,11 @@ export function CraftSheet(props: CraftSheetProps) {
     () => analyzeCraftCost(graph, prices, entry.id, { modes }).root,
     [graph, prices, modes, entry.id],
   );
-  const list = useMemo(() => buildShoppingList(root, quantity, prices), [root, quantity, prices]);
+  const list = useMemo(
+    () => buildShoppingList(root, quantity, prices, inventory),
+    [root, quantity, prices, inventory],
+  );
+  const usesStock = list.lines.some(line => line.fromStock > 0);
 
   const recipe = graph.get(entry.id);
   if (recipe === undefined || root.children.length === 0) {
@@ -118,9 +127,11 @@ export function CraftSheet(props: CraftSheetProps) {
           quantity={quantity}
           entryById={entryById}
           priceEntries={priceEntries}
+          inventory={inventory}
           modes={modes}
           onModeChange={onModeChange}
           onPriceChange={onPriceChange}
+          onStockChange={onStockChange}
         />
         <div className="flex items-center justify-between gap-2 bg-zinc-900/60 px-3 py-2 font-medium">
           <span>Coût du craft {quantity > 1 ? `(× ${quantity})` : ''}</span>
@@ -222,6 +233,8 @@ export function CraftSheet(props: CraftSheetProps) {
         key={entry.id}
         list={list}
         entryById={entryById}
+        inventory={inventory}
+        onStockChange={onStockChange}
         quantity={quantity}
         itemName={entry.n}
       />
@@ -233,6 +246,11 @@ export function CraftSheet(props: CraftSheetProps) {
         onMarketPriceChange={value => onPriceChange(entry.id, value)}
         taxRate={taxRate}
         marginalThresholdPct={marginalThresholdPct}
+        stock={
+          usesStock && list.totalCost !== null && list.stockValue !== null
+            ? { cashTotal: list.totalCost, stockValue: list.stockValue }
+            : null
+        }
       />
     </div>
   );
