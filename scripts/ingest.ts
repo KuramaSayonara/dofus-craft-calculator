@@ -31,7 +31,9 @@ import {
   questNeedsFileSchema,
   rawDbJobSchema,
   rawDbQuestCategorySchema,
+  rawDbQuestObjectiveSchema,
   rawDbQuestSchema,
+  rawDbQuestStepSchema,
   rawDbRecipeSchema,
   rawItemSchema,
   recipeRecordSchema,
@@ -245,7 +247,11 @@ interface QuestInfo {
   needsByItem: Map<number, QuestNeed[]>;
 }
 
-async function loadDofusdbQuests(): Promise<QuestInfo | null> {
+/**
+ * @param items catalogue connu : `parameter1` peut porter un id de monstre ou
+ *   de PNJ selon le type d'objectif, on ne garde que les vrais objets.
+ */
+async function loadDofusdbQuests(items: Map<number, LoadedItem>): Promise<QuestInfo | null> {
   try {
     console.log('DofusDB : catégories de quête…');
     const categories = new Map<number, string>();
@@ -255,51 +261,150 @@ async function loadDofusdbQuests(): Promise<QuestInfo | null> {
       categories.set(category.id, category.name.fr);
     }
 
-    console.log('DofusDB : quêtes (pagination)…');
-    const select = '$select[]=id&$select[]=name&$select[]=need&$select[]=categoryId&$select[]=levelMin';
-    const first = feathersPageSchema.parse(await fetchJson(`${CONFIG.dbBase}/quests?$limit=100&$skip=0&${select}`));
-    const pageSize = first.data.length;
-    if (pageSize === 0 || first.total === 0) throw new Error('première page de quêtes vide');
-
-    const needsByItem = new Map<number, QuestNeed[]>();
-    let questsWithNeeds = 0;
-    const ingestPage = (data: unknown[]) => {
-      for (const raw of data) {
-        const quest = rawDbQuestSchema.parse(raw);
-        const items = quest.need?.items ?? [];
-        const quantities = quest.need?.quantities ?? [];
-        if (items.length === 0) continue;
-        // les deux tableaux sont parallèles ; une désynchro signalerait un
-        // changement de format côté API et rendrait les quantités fausses
-        if (items.length !== quantities.length) {
-          fail(
-            `quête ${quest.id} : ${items.length} objets mais ${quantities.length} quantités — ` +
-              `format DofusDB modifié, les quantités ne sont plus fiables`,
-          );
-        }
-        const name = quest.name?.fr;
-        if (name === undefined || name === null || name === '') continue;
-        questsWithNeeds++;
-        for (let i = 0; i < items.length; i++) {
-          const quantity = quantities[i]!;
-          if (quantity <= 0) continue;
-          const list = needsByItem.get(items[i]!) ?? [];
-          list.push({
-            q: quest.id,
-            n: name,
-            x: quantity,
-            c: quest.categoryId ?? null,
-            lv: quest.levelMin ?? null,
-          });
-          needsByItem.set(items[i]!, list);
-        }
+    /** parcourt entièrement une collection Feathers page par page */
+    const paginate = async (path: string, select: string, onPage: (data: unknown[]) => void) => {
+      const first = feathersPageSchema.parse(await fetchJson(`${CONFIG.dbBase}${path}?$limit=100&$skip=0&${select}`));
+      const pageSize = first.data.length;
+      if (pageSize === 0 || first.total === 0) throw new Error(`première page vide pour ${path}`);
+      onPage(first.data);
+      for (let skip = pageSize; skip < first.total; skip += pageSize) {
+        await sleep(CONFIG.dbPageDelayMs);
+        const page = feathersPageSchema.parse(
+          await fetchJson(`${CONFIG.dbBase}${path}?$limit=${pageSize}&$skip=${skip}&${select}`),
+        );
+        onPage(page.data);
       }
+      return first.total;
     };
-    ingestPage(first.data);
-    for (let skip = pageSize; skip < first.total; skip += pageSize) {
-      await sleep(CONFIG.dbPageDelayMs);
-      const page = feathersPageSchema.parse(await fetchJson(`${CONFIG.dbBase}/quests?$limit=${pageSize}&$skip=${skip}&${select}`));
-      ingestPage(page.data);
+
+    console.log('DofusDB : quêtes…');
+    interface QuestMeta {
+      name: string;
+      categoryId: number | null;
+      levelMin: number | null;
+    }
+    const questMeta = new Map<number, QuestMeta>();
+    /** besoins déclarés au niveau de la quête : incomplets, gardés en filet */
+    const questLevelNeeds = new Map<number, Map<number, number>>();
+    await paginate(
+      '/quests',
+      '$select[]=id&$select[]=name&$select[]=need&$select[]=categoryId&$select[]=levelMin',
+      data => {
+        for (const raw of data) {
+          const quest = rawDbQuestSchema.parse(raw);
+          const name = quest.name?.fr;
+          if (name === undefined || name === null || name === '') continue;
+          questMeta.set(quest.id, {
+            name,
+            categoryId: quest.categoryId ?? null,
+            levelMin: quest.levelMin ?? null,
+          });
+          const items = quest.need?.items ?? [];
+          const quantities = quest.need?.quantities ?? [];
+          if (items.length === 0) continue;
+          if (items.length !== quantities.length) {
+            fail(
+              `quête ${quest.id} : ${items.length} objets mais ${quantities.length} quantités — ` +
+                `format DofusDB modifié, les quantités ne sont plus fiables`,
+            );
+          }
+          const perItem = questLevelNeeds.get(quest.id) ?? new Map<number, number>();
+          for (let i = 0; i < items.length; i++) {
+            const quantity = quantities[i]!;
+            if (quantity > 0) perItem.set(items[i]!, Math.max(perItem.get(items[i]!) ?? 0, quantity));
+          }
+          questLevelNeeds.set(quest.id, perItem);
+        }
+      },
+    );
+    console.log(`  ${questMeta.size} quêtes`);
+
+    console.log('DofusDB : étapes de quête…');
+    const questOfStep = new Map<number, number>();
+    await paginate('/quest-steps', '$select[]=id&$select[]=questId', data => {
+      for (const raw of data) {
+        const step = rawDbQuestStepSchema.parse(raw);
+        if (step.questId !== null && step.questId !== undefined) questOfStep.set(step.id, step.questId);
+      }
+    });
+    console.log(`  ${questOfStep.size} étapes`);
+
+    console.log('DofusDB : objectifs de quête (source complète des besoins)…');
+    /** questId → (itemId → quantité cumulée sur tous les objectifs) */
+    const objectiveNeeds = new Map<number, Map<number, number>>();
+    let orphanObjectives = 0;
+    /** objectif « apporter N exemplaires » : l'objet est dans parameters */
+    const BRING_OBJECTIVE_TYPE = 3;
+    const objectiveTotal = await paginate(
+      '/quest-objectives',
+      '$select[]=id&$select[]=stepId&$select[]=typeId&$select[]=parameters&$select[]=need',
+      data => {
+        for (const raw of data) {
+          const objective = rawDbQuestObjectiveSchema.parse(raw);
+          const stepId = objective.stepId;
+          const questId = stepId !== null && stepId !== undefined ? questOfStep.get(stepId) : undefined;
+
+          const add = (itemId: number, quantity: number) => {
+            if (quantity <= 0 || !items.has(itemId)) return;
+            if (questId === undefined) {
+              orphanObjectives++;
+              return;
+            }
+            const perItem = objectiveNeeds.get(questId) ?? new Map<number, number>();
+            perItem.set(itemId, (perItem.get(itemId) ?? 0) + quantity);
+            objectiveNeeds.set(questId, perItem);
+          };
+
+          if (objective.typeId === BRING_OBJECTIVE_TYPE) {
+            // `need.generated` liste ici la recette décomposée de l'objet
+            // demandé : l'utiliser inventerait une demande sur des ingrédients
+            // que DofusDB ne relie pas à la quête.
+            const itemId = objective.parameters?.parameter1;
+            const quantity = objective.parameters?.parameter2;
+            if (typeof itemId === 'number' && typeof quantity === 'number') add(itemId, quantity);
+            continue;
+          }
+
+          const generated = objective.need?.generated;
+          const needItems = generated?.items ?? [];
+          const quantities = generated?.quantities ?? [];
+          const toUse = generated?.itemToUse ?? [];
+          if (needItems.length === 0 && toUse.length === 0) continue;
+          if (needItems.length !== quantities.length) {
+            fail(
+              `objectif ${objective.id} : ${needItems.length} objets mais ${quantities.length} quantités — ` +
+                `format DofusDB modifié, les quantités ne sont plus fiables`,
+            );
+          }
+          for (let i = 0; i < needItems.length; i++) add(needItems[i]!, quantities[i]!);
+          // un objet à utiliser compte pour 1 exemplaire s'il n'est pas déjà listé
+          for (const itemId of toUse) {
+            if (!(objectiveNeeds.get(questId ?? -1)?.has(itemId) ?? false)) add(itemId, 1);
+          }
+        }
+      },
+    );
+    console.log(`  ${objectiveTotal} objectifs (${orphanObjectives} sans quête rattachée)`);
+
+    // union des deux sources : on garde la plus grande quantité par couple
+    // (quête, objet) pour ne jamais compter deux fois le même besoin
+    const needsByItem = new Map<number, QuestNeed[]>();
+    const questIds = new Set([...objectiveNeeds.keys(), ...questLevelNeeds.keys()]);
+    let questsWithNeeds = 0;
+    for (const questId of questIds) {
+      const meta = questMeta.get(questId);
+      if (meta === undefined) continue;
+      const merged = new Map<number, number>(objectiveNeeds.get(questId) ?? []);
+      for (const [itemId, quantity] of questLevelNeeds.get(questId) ?? []) {
+        merged.set(itemId, Math.max(merged.get(itemId) ?? 0, quantity));
+      }
+      if (merged.size === 0) continue;
+      questsWithNeeds++;
+      for (const [itemId, quantity] of merged) {
+        const list = needsByItem.get(itemId) ?? [];
+        list.push({ q: questId, n: meta.name, x: quantity, c: meta.categoryId, lv: meta.levelMin });
+        needsByItem.set(itemId, list);
+      }
     }
     console.log(`  ${questsWithNeeds} quêtes réclament ${needsByItem.size} objets distincts`);
     return { categories, needsByItem };
@@ -377,7 +482,7 @@ async function main(): Promise<void> {
   checkIntegrity(items);
 
   const jobInfo = await loadDofusdbJobs();
-  const questInfo = await loadDofusdbQuests();
+  const questInfo = await loadDofusdbQuests(items);
 
   const sorted = [...items.values()].sort((a, b) => a.id - b.id);
   const craftables = sorted.filter(item => item.recipe.length > 0);

@@ -61,6 +61,43 @@ export const rawDbQuestCategorySchema = z.looseObject({
   name: z.looseObject({ fr: z.string().min(1) }),
 });
 
+export const rawDbQuestStepSchema = z.looseObject({
+  id: z.number().int(),
+  questId: z.number().int().nullish(),
+});
+
+// Les besoins réels d'une quête vivent dans ses objectifs : le champ `need`
+// au niveau de la quête est incomplet (vérifié : la quête « Produits naturels »
+// déclare 3 objets alors que ses objectifs en réclament 6).
+export const rawDbQuestObjectiveSchema = z.looseObject({
+  id: z.number().int(),
+  stepId: z.number().int().nullish(),
+  typeId: z.number().int().nullish(),
+  // Pour typeId 3 (« apporter N exemplaires à un PNJ »), l'objet réellement
+  // demandé est parameter1 et la quantité parameter2 — vérifié sur 361 couples
+  // (objet, quête) confrontés à l'index inverse questsThatUse de DofusDB :
+  // 100 % de concordance, zéro contradiction. Dans ce cas `need.generated`
+  // contient la recette DÉCOMPOSÉE de l'objet, qu'il ne faut pas confondre
+  // avec la demande réelle.
+  parameters: z
+    .looseObject({
+      parameter1: z.number().int().nullish(),
+      parameter2: z.number().int().nullish(),
+    })
+    .nullish(),
+  need: z
+    .looseObject({
+      generated: z
+        .looseObject({
+          items: z.array(z.number().int()).nullish(),
+          quantities: z.array(z.number().int()).nullish(),
+          itemToUse: z.array(z.number().int()).nullish(),
+        })
+        .nullish(),
+    })
+    .nullish(),
+});
+
 // ---------------------------------------------------------------------------
 // Schémas de SORTIE : les fichiers committés dans data/.
 // L'app (Phase 3+) dérivera ses types d'ici — source de vérité unique.
