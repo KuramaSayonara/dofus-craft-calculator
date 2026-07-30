@@ -34,6 +34,8 @@ export interface SearchOptions {
   readonly levelMax?: number;
   /** id du métier qui craft l'objet */
   readonly jobId?: number;
+  /** ne garder que les objets réclamés par au moins une quête */
+  readonly questDemandedOnly?: boolean;
 }
 
 function matchesFilters(entry: SearchEntry, options: SearchOptions): boolean {
@@ -42,6 +44,7 @@ function matchesFilters(entry: SearchEntry, options: SearchOptions): boolean {
   if (options.levelMin !== undefined && entry.l < options.levelMin) return false;
   if (options.levelMax !== undefined && entry.l > options.levelMax) return false;
   if (options.jobId !== undefined && entry.j !== options.jobId) return false;
+  if (options.questDemandedOnly === true && entry.qn === undefined) return false;
   return true;
 }
 
@@ -51,7 +54,8 @@ function hasBrowseFilters(options: SearchOptions): boolean {
     options.type !== undefined ||
     options.levelMin !== undefined ||
     options.levelMax !== undefined ||
-    options.jobId !== undefined
+    options.jobId !== undefined ||
+    options.questDemandedOnly === true
   );
 }
 

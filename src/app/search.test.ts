@@ -81,6 +81,17 @@ describe('filtres cumulables', () => {
     expect(searchItems(richIndex, 'epee', { jobId: 27 }).map(e => e.id)).toEqual([3]);
   });
 
+  it('filtre les objets réclamés par une quête', () => {
+    const quested = prepareIndex([
+      { id: 140, n: 'Bâton de Boisaille', l: 9, t: 'Bâton', c: 'equipment', i: null, r: 1, qn: 10 },
+      { id: 44, n: 'Épée de Boisaille', l: 7, t: 'Épée', c: 'equipment', i: null, r: 1 },
+    ]);
+    expect(searchItems(quested, 'boisaille').map(e => e.id).sort((a, b) => a - b)).toEqual([44, 140]);
+    expect(searchItems(quested, 'boisaille', { questDemandedOnly: true }).map(e => e.id)).toEqual([140]);
+    // utilisable seul, sans requête texte
+    expect(searchItems(quested, '', { questDemandedOnly: true }).map(e => e.id)).toEqual([140]);
+  });
+
   it('sans requête, les filtres permettent de parcourir le catalogue', () => {
     expect(searchItems(richIndex, '', { type: 'Épée' }).map(e => e.id).sort()).toEqual([1, 3]);
     expect(searchItems(richIndex, '', { jobId: 11, levelMin: 30 })).toHaveLength(2);
