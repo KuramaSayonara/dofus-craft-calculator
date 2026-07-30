@@ -18,7 +18,8 @@ Deux partis pris qui le distinguent des outils existants :
 | **Craft récursif** | Les ingrédients eux-mêmes craftables se déplient en arbre. Pour chacun : Acheter, Crafter, ou Automatique (le moins cher). Détection des cycles, profondeur limitée, prix manquants signalés — jamais traités comme zéro. |
 | **Rentabilité** | Taxe de l'hôtel de vente paramétrable, seuil de rentabilité exact au kama, comparaison prix marché / ton prix, profit par craft et pour la quantité voulue. |
 | **Carnet de prix** | Profils multi-serveurs, horodatage et pastilles de fraîcheur, saisie par lot ×1/×10/×100, import en masse `nom;prix`, export/import JSON. |
-| **Liste de courses** | Ressources de base agrégées après résolution de l'arbre, cases à cocher, export texte. |
+| **Stock possédé** | Saisie de ce qu'on a déjà en jeu : la liste de courses ne réclame que le complément, et deux coûts sont affichés (voir ci-dessous). |
+| **Liste de courses** | Ressources de base agrégées après résolution de l'arbre, stock déduit, cases à cocher, export texte. |
 | **Suivi** | Crafts sauvegardés en dossiers ; ventes en cours à coût figé ; historique avec profit réel, marge moyenne et classement. |
 | **Top crafts** | Balayage de tous les crafts du jeu avec tes prix, trié par marge, plus les crafts « presque calculables » et le nombre de prix qui manquent. |
 
@@ -28,6 +29,22 @@ Il n'existe aucune source publique et fiable des prix de l'hôtel de vente : ils
 serveur et changent en permanence. Le site n'invente donc **aucun** prix — un prix faux serait
 pire que pas de prix. Tu saisis les tiens ; ils restent **sur ton appareil** (IndexedDB, avec
 localStorage en repli) et ne sont envoyés nulle part.
+
+## Deux coûts, et pourquoi
+
+Quand on possède déjà une partie des ressources, l'outil affiche **deux chiffres différents**,
+volontairement :
+
+- **Coût de revient complet** — toutes les ressources comptées au prix du marché, y compris
+  celles qu'on possède. C'est le juge honnête de la rentabilité : les ressources en stock
+  auraient pu être revendues telles quelles, les utiliser a donc un coût réel.
+- **Kamas à sortir** — uniquement ce qu'il reste à acheter. C'est la trésorerie : ce qui quitte
+  vraiment la bourse maintenant.
+
+Exemple réel. Potion de Souvenir (10 Sauge + 20 Ortie), Sauge à 101 K, Ortie à 146 K, vente à
+2 706 K. Coût complet 3 930 K → perte de 1 278 K. Avec 1 000 Sauge déjà en stock, il ne reste
+que 2 920 K à sortir… mais la vente ne rapporte que 2 652 K net : **encore 268 K de perte**.
+Posséder la ressource ne rend pas un craft rentable, ça réduit seulement la mise de départ.
 
 ## Lancer le projet
 
