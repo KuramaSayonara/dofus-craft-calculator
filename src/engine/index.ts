@@ -28,3 +28,4 @@ export {
 } from './profitability.ts';
 export { buildShoppingList, type ShoppingLine, type ShoppingList } from './shopping.ts';
 export { scanCrafts, type CraftScan, type CraftScanRow, type ScanOptions } from './topcrafts.ts';
+export { readVolume, type SalesVolume, type VolumeReading, type VolumeWindow } from './volume.ts';
