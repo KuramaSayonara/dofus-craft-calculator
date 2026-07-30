@@ -3,7 +3,7 @@
 // d'exécution : il prend un graphe de recettes + un carnet de prix.
 
 export { DEFAULT_MARGINAL_THRESHOLD_PCT, DEFAULT_MAX_DEPTH, DEFAULT_TAX_RATE } from './config.ts';
-export type { PriceBook, RecipeGraph, RecipeInfo } from './types.ts';
+export type { Inventory, PriceBook, RecipeGraph, RecipeInfo } from './types.ts';
 export { graphFromRecipesFile } from './graph.ts';
 export { formatKamas, KAMAS_GROUP_SEPARATOR, parseKamas, unitPriceFromLot } from './kamas.ts';
 export {

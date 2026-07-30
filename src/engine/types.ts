@@ -16,3 +16,10 @@ export type RecipeGraph = ReadonlyMap<number, RecipeInfo>;
  * Un objet absent de la carte a un prix INCONNU (jamais traité comme 0).
  */
 export type PriceBook = ReadonlyMap<number, number>;
+
+/**
+ * Ce que l'utilisateur possède déjà : id d'objet → quantité en stock.
+ * Un objet absent vaut 0. Le stock réduit ce qu'il faut ACHETER, mais pas le
+ * coût de revient réel : une ressource possédée aurait pu être revendue.
+ */
+export type Inventory = ReadonlyMap<number, number>;
