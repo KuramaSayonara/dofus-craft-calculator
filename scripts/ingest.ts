@@ -28,11 +28,15 @@ import {
   feathersPageSchema,
   itemRecordSchema,
   metaSchema,
+  questNeedsFileSchema,
   rawDbJobSchema,
+  rawDbQuestCategorySchema,
+  rawDbQuestSchema,
   rawDbRecipeSchema,
   rawItemSchema,
   recipeRecordSchema,
   searchEntrySchema,
+  type QuestNeed,
 } from './schema.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -230,6 +234,84 @@ async function loadDofusdbJobs(): Promise<JobInfo | null> {
 }
 
 // ---------------------------------------------------------------------------
+// 3 bis. DofusDB : ce que les quêtes réclament, et en quelle quantité
+//
+// C'est ce qui explique pourquoi certains crafts se vendent par lot : personne
+// n'achète un Bâton de Boisaille à l'unité, la quête en demande 10.
+// ---------------------------------------------------------------------------
+
+interface QuestInfo {
+  categories: Map<number, string>;
+  needsByItem: Map<number, QuestNeed[]>;
+}
+
+async function loadDofusdbQuests(): Promise<QuestInfo | null> {
+  try {
+    console.log('DofusDB : catégories de quête…');
+    const categories = new Map<number, string>();
+    const categoryPage = feathersPageSchema.parse(await fetchJson(`${CONFIG.dbBase}/quest-categories?$limit=100`));
+    for (const raw of categoryPage.data) {
+      const category = rawDbQuestCategorySchema.parse(raw);
+      categories.set(category.id, category.name.fr);
+    }
+
+    console.log('DofusDB : quêtes (pagination)…');
+    const select = '$select[]=id&$select[]=name&$select[]=need&$select[]=categoryId&$select[]=levelMin';
+    const first = feathersPageSchema.parse(await fetchJson(`${CONFIG.dbBase}/quests?$limit=100&$skip=0&${select}`));
+    const pageSize = first.data.length;
+    if (pageSize === 0 || first.total === 0) throw new Error('première page de quêtes vide');
+
+    const needsByItem = new Map<number, QuestNeed[]>();
+    let questsWithNeeds = 0;
+    const ingestPage = (data: unknown[]) => {
+      for (const raw of data) {
+        const quest = rawDbQuestSchema.parse(raw);
+        const items = quest.need?.items ?? [];
+        const quantities = quest.need?.quantities ?? [];
+        if (items.length === 0) continue;
+        // les deux tableaux sont parallèles ; une désynchro signalerait un
+        // changement de format côté API et rendrait les quantités fausses
+        if (items.length !== quantities.length) {
+          fail(
+            `quête ${quest.id} : ${items.length} objets mais ${quantities.length} quantités — ` +
+              `format DofusDB modifié, les quantités ne sont plus fiables`,
+          );
+        }
+        const name = quest.name?.fr;
+        if (name === undefined || name === null || name === '') continue;
+        questsWithNeeds++;
+        for (let i = 0; i < items.length; i++) {
+          const quantity = quantities[i]!;
+          if (quantity <= 0) continue;
+          const list = needsByItem.get(items[i]!) ?? [];
+          list.push({
+            q: quest.id,
+            n: name,
+            x: quantity,
+            c: quest.categoryId ?? null,
+            lv: quest.levelMin ?? null,
+          });
+          needsByItem.set(items[i]!, list);
+        }
+      }
+    };
+    ingestPage(first.data);
+    for (let skip = pageSize; skip < first.total; skip += pageSize) {
+      await sleep(CONFIG.dbPageDelayMs);
+      const page = feathersPageSchema.parse(await fetchJson(`${CONFIG.dbBase}/quests?$limit=${pageSize}&$skip=${skip}&${select}`));
+      ingestPage(page.data);
+    }
+    console.log(`  ${questsWithNeeds} quêtes réclament ${needsByItem.size} objets distincts`);
+    return { categories, needsByItem };
+  } catch (error) {
+    if (error instanceof IngestError) throw error;
+    console.warn(`AVERTISSEMENT : quêtes DofusDB indisponibles (${String(error)}).`);
+    console.warn('Les données seront générées SANS les besoins de quête.');
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 4. Garde-fou anti-régression par rapport au run précédent
 // ---------------------------------------------------------------------------
 
@@ -269,6 +351,17 @@ function writeJsonArray(path: string, records: unknown[]): void {
   writeFileSync(path, `[\n${records.map(r => JSON.stringify(r)).join(',\n')}\n]\n`);
 }
 
+function writeQuestNeedsFile(
+  path: string,
+  categories: Record<string, string>,
+  needs: Record<string, QuestNeed[]>,
+): void {
+  const body = Object.entries(needs)
+    .map(([itemId, list]) => `${JSON.stringify(itemId)}:${JSON.stringify(list)}`)
+    .join(',\n');
+  writeFileSync(path, `{\n"categories": ${JSON.stringify(categories)},\n"needs": {\n${body}\n}\n}\n`);
+}
+
 function writeRecipesFile(path: string, jobs: Map<number, string>, recipes: [number, RecipeRecord][]): void {
   const jobsObj = Object.fromEntries([...jobs.entries()].sort((a, b) => a[0] - b[0]).map(([id, name]) => [String(id), name]));
   const body = recipes.map(([id, record]) => `${JSON.stringify(String(id))}:${JSON.stringify(record)}`).join(',\n');
@@ -284,6 +377,7 @@ async function main(): Promise<void> {
   checkIntegrity(items);
 
   const jobInfo = await loadDofusdbJobs();
+  const questInfo = await loadDofusdbQuests();
 
   const sorted = [...items.values()].sort((a, b) => a.id - b.id);
   const craftables = sorted.filter(item => item.recipe.length > 0);
@@ -326,8 +420,25 @@ async function main(): Promise<void> {
   }));
 
   const recipesById = new Map(recipeEntries.map(([id, record]) => [id, record]));
+
+  // besoins de quête, restreints aux objets réellement présents dans le dataset
+  const questNeeds: Record<string, QuestNeed[]> = {};
+  let questDemandedCraftables = 0;
+  if (questInfo !== null) {
+    for (const [itemId, needs] of [...questInfo.needsByItem.entries()].sort((a, b) => a[0] - b[0])) {
+      if (!items.has(itemId)) continue; // objet hors de notre catalogue
+      questNeeds[String(itemId)] = [...needs].sort((a, b) => b.x - a.x || a.q - b.q);
+      if (recipesById.has(itemId)) questDemandedCraftables++;
+    }
+  }
+  const maxQuestQuantity = (itemId: number): number | undefined => {
+    const needs = questNeeds[String(itemId)];
+    return needs === undefined ? undefined : needs[0]!.x;
+  };
+
   const searchEntries: SearchEntry[] = sorted.map(item => {
     const recipe = recipesById.get(item.id);
+    const questQuantity = maxQuestQuantity(item.id);
     return {
       id: item.id,
       n: item.name,
@@ -337,6 +448,7 @@ async function main(): Promise<void> {
       i: item.icon,
       r: recipe !== undefined ? 1 : 0,
       ...(recipe !== undefined && recipe.j !== null ? { j: recipe.j } : {}),
+      ...(questQuantity !== undefined ? { qn: questQuantity } : {}),
     };
   });
 
@@ -361,6 +473,8 @@ async function main(): Promise<void> {
       craftableTotal: craftables.length,
       byCategory,
       craftableByJob: Object.fromEntries(Object.entries(craftableByJob).sort((a, b) => b[1] - a[1])),
+      questDemandedItems: Object.keys(questNeeds).length,
+      questDemandedCraftables,
     },
   };
 
@@ -372,16 +486,38 @@ async function main(): Promise<void> {
   recipeEntries.forEach(([, record]) => recipeRecordSchema.parse(record));
   metaSchema.parse(meta);
 
+  // catégories réduites à celles réellement citées par un besoin retenu
+  const usedCategories: Record<string, string> = {};
+  if (questInfo !== null) {
+    for (const needs of Object.values(questNeeds)) {
+      for (const need of needs) {
+        if (need.c === null) continue;
+        const label = questInfo.categories.get(need.c);
+        if (label !== undefined) usedCategories[String(need.c)] = label;
+      }
+    }
+  }
+  const questNeedsFile = { categories: usedCategories, needs: questNeeds };
+  questNeedsFileSchema.parse(questNeedsFile);
+
   mkdirSync(DATA_DIR, { recursive: true });
   writeJsonArray(join(DATA_DIR, 'items.json'), itemRecords);
   writeJsonArray(join(DATA_DIR, 'search-index.json'), searchEntries);
   writeRecipesFile(join(DATA_DIR, 'recipes.json'), usedJobs, recipeEntries);
+  writeQuestNeedsFile(join(DATA_DIR, 'quest-needs.json'), usedCategories, questNeeds);
   writeFileSync(join(DATA_DIR, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
 
   console.log('');
   console.log(`Terminé — Dofus ${gameVersion}`);
   console.log(`  objets : ${meta.counts.itemsTotal} | craftables : ${meta.counts.craftableTotal}`);
   console.log(`  métiers : ${jobInfo !== null ? `${usedJobs.size} (source DofusDB)` : 'INDISPONIBLES'}`);
+  console.log(
+    `  quêtes  : ${
+      questInfo !== null
+        ? `${meta.counts.questDemandedItems} objets réclamés, dont ${questDemandedCraftables} craftables`
+        : 'INDISPONIBLES'
+    }`,
+  );
   for (const [job, count] of Object.entries(meta.counts.craftableByJob)) {
     console.log(`    ${job.padEnd(20)} ${count}`);
   }

@@ -43,6 +43,24 @@ export const rawDbJobSchema = z.looseObject({
   name: z.looseObject({ fr: z.string().min(1) }),
 });
 
+export const rawDbQuestSchema = z.looseObject({
+  id: z.number().int(),
+  name: z.looseObject({ fr: z.string().min(1) }).nullish(),
+  categoryId: z.number().int().nullish(),
+  levelMin: z.number().int().nullish(),
+  need: z
+    .looseObject({
+      items: z.array(z.number().int()).nullish(),
+      quantities: z.array(z.number().int()).nullish(),
+    })
+    .nullish(),
+});
+
+export const rawDbQuestCategorySchema = z.looseObject({
+  id: z.number().int(),
+  name: z.looseObject({ fr: z.string().min(1) }),
+});
+
 // ---------------------------------------------------------------------------
 // Schémas de SORTIE : les fichiers committés dans data/.
 // L'app (Phase 3+) dérivera ses types d'ici — source de vérité unique.
@@ -81,6 +99,27 @@ export const recipesFileSchema = z.object({
 });
 export type RecipesFile = z.infer<typeof recipesFileSchema>;
 
+// data/quest-needs.json — quels objets les quêtes réclament, et en quelle
+// quantité. C'est ce qui explique pourquoi certains crafts se vendent par lot :
+// personne n'achète 1 Bâton de Boisaille, la quête en demande 10.
+// q = id de quête, n = nom, x = quantité demandée, c = catégorie, lv = niveau.
+export const questNeedSchema = z.object({
+  q: z.number().int(),
+  n: z.string().min(1),
+  x: z.number().int().positive(),
+  c: z.number().int().nullable(),
+  lv: z.number().int().nullable(),
+});
+export type QuestNeed = z.infer<typeof questNeedSchema>;
+
+export const questNeedsFileSchema = z.object({
+  /** id de catégorie → libellé (« Alignement Bonta », « Île de Frigost »…) */
+  categories: z.record(z.string(), z.string().min(1)),
+  /** itemId → quêtes qui le réclament */
+  needs: z.record(z.string(), z.array(questNeedSchema).min(1)),
+});
+export type QuestNeedsFile = z.infer<typeof questNeedsFileSchema>;
+
 // data/search-index.json — index léger chargé au premier rendu.
 // Clés courtes volontairement : n=nom, l=niveau, t=type, c=catégorie,
 // i=icône, r=1 si craftable, j=id métier (seulement si craftable et connu).
@@ -93,6 +132,8 @@ export const searchEntrySchema = z.object({
   i: z.union([z.number().int().min(0), z.string().min(1)]).nullable(),
   r: z.union([z.literal(0), z.literal(1)]),
   j: z.number().int().optional(),
+  /** quantité demandée par la quête la plus gourmande (absent si aucune quête) */
+  qn: z.number().int().positive().optional(),
 });
 export type SearchEntry = z.infer<typeof searchEntrySchema>;
 
@@ -107,6 +148,9 @@ export const metaSchema = z.object({
     craftableTotal: z.number().int().min(0),
     byCategory: z.record(z.string(), z.object({ items: z.number().int(), craftable: z.number().int() })),
     craftableByJob: z.record(z.string(), z.number().int()),
+    /** objets réclamés par au moins une quête ; défaut pour relire un meta.json antérieur */
+    questDemandedItems: z.number().int().min(0).default(0),
+    questDemandedCraftables: z.number().int().min(0).default(0),
   }),
 });
 export type Meta = z.infer<typeof metaSchema>;
