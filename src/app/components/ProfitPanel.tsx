@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   breakEvenPrice,
-  DEFAULT_TAX_RATE,
   evaluateSale,
   formatKamas,
   type SaleEvaluation,
@@ -16,6 +15,8 @@ interface ProfitPanelProps {
   /** prix marché constaté (partagé avec le carnet de prix) */
   marketPrice: number | null;
   onMarketPriceChange: (value: number | null) => void;
+  taxRate: number;
+  marginalThresholdPct: number;
 }
 
 const VERDICTS: Record<Verdict, { label: string; cls: string }> = {
@@ -24,7 +25,7 @@ const VERDICTS: Record<Verdict, { label: string; cls: string }> = {
   loss: { label: 'À perte', cls: 'bg-red-500/15 text-red-400 border-red-500/40' },
 };
 
-function SaleColumn({ title, sale, quantity }: { title: string; sale: SaleEvaluation; quantity: number }) {
+export function SaleColumn({ title, sale, quantity }: { title: string; sale: SaleEvaluation; quantity: number }) {
   const verdict = VERDICTS[sale.verdict];
   return (
     <div className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
@@ -69,9 +70,9 @@ function SaleColumn({ title, sale, quantity }: { title: string; sale: SaleEvalua
 }
 
 /** Rentabilité : seuil d'équilibre, comparaison prix marché / prix envisagé. */
-export function ProfitPanel({ craftCost, quantity, marketPrice, onMarketPriceChange }: ProfitPanelProps) {
+export function ProfitPanel(props: ProfitPanelProps) {
+  const { craftCost, quantity, marketPrice, onMarketPriceChange, taxRate, marginalThresholdPct } = props;
   const [myPrice, setMyPrice] = useState<number | null>(null);
-  const taxRate = DEFAULT_TAX_RATE;
 
   if (craftCost === null) {
     return (
@@ -88,7 +89,9 @@ export function ProfitPanel({ craftCost, quantity, marketPrice, onMarketPriceCha
     <section className="space-y-3 rounded-lg border border-zinc-800 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-medium text-zinc-200">Rentabilité</h3>
-        <span className="text-xs text-zinc-500">taxe HDV {(taxRate * 100).toFixed(0)} %</span>
+        <span className="text-xs text-zinc-500">
+          taxe HDV {(taxRate * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %
+        </span>
       </div>
 
       <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm">
@@ -112,14 +115,26 @@ export function ProfitPanel({ craftCost, quantity, marketPrice, onMarketPriceCha
           {marketPrice !== null && (
             <SaleColumn
               title="Au prix marché"
-              sale={evaluateSale({ craftCost, salePrice: marketPrice, quantity, taxRate })}
+              sale={evaluateSale({
+                craftCost,
+                salePrice: marketPrice,
+                quantity,
+                taxRate,
+                marginalThresholdPct,
+              })}
               quantity={quantity}
             />
           )}
           {myPrice !== null && (
             <SaleColumn
               title="À mon prix"
-              sale={evaluateSale({ craftCost, salePrice: myPrice, quantity, taxRate })}
+              sale={evaluateSale({
+                craftCost,
+                salePrice: myPrice,
+                quantity,
+                taxRate,
+                marginalThresholdPct,
+              })}
               quantity={quantity}
             />
           )}

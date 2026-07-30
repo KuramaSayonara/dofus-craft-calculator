@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   analyzeCraftCost,
   buildShoppingList,
@@ -8,6 +8,7 @@ import {
   type SourcingMode,
 } from '../../engine/index.ts';
 import type { RecipesFile, SearchEntry } from '../data.ts';
+import type { PriceEntry } from '../state.ts';
 import { CraftTree } from './CraftTree.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 import { ProfitPanel } from './ProfitPanel.tsx';
@@ -18,14 +19,21 @@ interface CraftSheetProps {
   jobs: RecipesFile['jobs'];
   entryById: ReadonlyMap<number, SearchEntry>;
   prices: PriceBook;
+  priceEntries: ReadonlyMap<number, PriceEntry>;
   onPriceChange: (itemId: number, value: number | null) => void;
   modes: ReadonlyMap<number, SourcingMode>;
   onModeChange: (itemId: number, mode: SourcingMode) => void;
   quantity: number;
   onQuantityChange: (value: number) => void;
+  taxRate: number;
+  marginalThresholdPct: number;
+  /** nom/dossier pré-remplis quand la fiche vient d'une sauvegarde */
+  saveDefaults: { name: string; folder: string } | null;
+  onSaveCraft: (name: string, folder: string) => void;
+  onListSale: (unitCost: number) => void;
 }
 
-/** Fiche de craft : arbre récursif, prix, coût total, rentabilité. */
+/** Fiche de craft : arbre récursif, prix, coût total, rentabilité, actions. */
 export function CraftSheet(props: CraftSheetProps) {
   const {
     entry,
@@ -33,15 +41,22 @@ export function CraftSheet(props: CraftSheetProps) {
     jobs,
     entryById,
     prices,
+    priceEntries,
     onPriceChange,
     modes,
     onModeChange,
     quantity,
     onQuantityChange,
+    taxRate,
+    marginalThresholdPct,
+    saveDefaults,
+    onSaveCraft,
+    onListSale,
   } = props;
 
-  // arbre récursif complet : profondeur par défaut du moteur, arbitrage
-  // acheter / crafter / auto par ingrédient via `modes`
+  const [saveForm, setSaveForm] = useState<{ name: string; folder: string } | null>(null);
+  const [confirmSale, setConfirmSale] = useState(false);
+
   const root = useMemo(
     () => analyzeCraftCost(graph, prices, entry.id, { modes }).root,
     [graph, prices, modes, entry.id],
@@ -101,6 +116,7 @@ export function CraftSheet(props: CraftSheetProps) {
           root={root}
           quantity={quantity}
           entryById={entryById}
+          priceEntries={priceEntries}
           modes={modes}
           onModeChange={onModeChange}
           onPriceChange={onPriceChange}
@@ -119,11 +135,95 @@ export function CraftSheet(props: CraftSheetProps) {
         </div>
       </section>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSaveForm(saveDefaults ?? { name: entry.n, folder: '' })}
+          className="rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800"
+        >
+          💾 Sauvegarder ce craft
+        </button>
+        <button
+          type="button"
+          disabled={root.craftUnitCost === null}
+          title={
+            root.craftUnitCost === null
+              ? 'Renseigne tous les prix pour figer le coût'
+              : 'Fige le coût de craft actuel'
+          }
+          onClick={() => setConfirmSale(true)}
+          className="rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          🏷️ Mettre en vente
+        </button>
+      </div>
+
+      {saveForm !== null && (
+        <form
+          onSubmit={event => {
+            event.preventDefault();
+            if (saveForm.name.trim() === '') return;
+            onSaveCraft(saveForm.name.trim(), saveForm.folder.trim());
+            setSaveForm(null);
+          }}
+          className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800 p-3 text-sm"
+        >
+          <label className="flex flex-col gap-1 text-zinc-400">
+            Nom de la sauvegarde
+            <input
+              autoFocus
+              value={saveForm.name}
+              onChange={event => setSaveForm({ ...saveForm, name: event.target.value })}
+              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 outline-none focus:border-amber-500"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-zinc-400">
+            Dossier (optionnel)
+            <input
+              value={saveForm.folder}
+              onChange={event => setSaveForm({ ...saveForm, folder: event.target.value })}
+              placeholder="ex. : Forgeron"
+              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 outline-none focus:border-amber-500"
+            />
+          </label>
+          <button type="submit" className="rounded bg-amber-500/20 px-3 py-1.5 text-amber-300 hover:bg-amber-500/30">
+            Enregistrer
+          </button>
+          <button type="button" onClick={() => setSaveForm(null)} className="px-2 py-1.5 text-zinc-400 hover:text-zinc-200">
+            Annuler
+          </button>
+        </form>
+      )}
+
+      {confirmSale && root.craftUnitCost !== null && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 p-3 text-sm">
+          <span>
+            Mettre en vente <strong>{quantity} × {entry.n}</strong> avec un coût figé de{' '}
+            <strong className="tabular-nums">{formatKamas(root.craftUnitCost)} K</strong> l'unité ?
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onListSale(root.craftUnitCost!);
+              setConfirmSale(false);
+            }}
+            className="rounded bg-amber-500/20 px-3 py-1.5 text-amber-300 hover:bg-amber-500/30"
+          >
+            Confirmer
+          </button>
+          <button type="button" onClick={() => setConfirmSale(false)} className="px-2 py-1.5 text-zinc-400 hover:text-zinc-200">
+            Annuler
+          </button>
+        </div>
+      )}
+
       <ProfitPanel
         craftCost={root.craftUnitCost}
         quantity={quantity}
         marketPrice={prices.get(entry.id) ?? null}
         onMarketPriceChange={value => onPriceChange(entry.id, value)}
+        taxRate={taxRate}
+        marginalThresholdPct={marginalThresholdPct}
       />
     </div>
   );

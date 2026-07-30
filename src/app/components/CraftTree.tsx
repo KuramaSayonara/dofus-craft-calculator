@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatKamas, type CostNode, type SourcingMode } from '../../engine/index.ts';
 import type { SearchEntry } from '../data.ts';
+import type { PriceEntry } from '../state.ts';
 import { ItemIcon } from './ItemIcon.tsx';
 import { PriceInput } from './PriceInput.tsx';
 
@@ -9,6 +10,8 @@ interface CraftTreeProps {
   /** nombre de crafts de la racine */
   quantity: number;
   entryById: ReadonlyMap<number, SearchEntry>;
+  /** entrées de prix horodatées (pastilles de fraîcheur) */
+  priceEntries: ReadonlyMap<number, PriceEntry>;
   modes: ReadonlyMap<number, SourcingMode>;
   onModeChange: (itemId: number, mode: SourcingMode) => void;
   onPriceChange: (itemId: number, value: number | null) => void;
@@ -74,7 +77,7 @@ const SOURCE_LABELS: Record<CostNode['source'], string> = {
 
 /** Arbre de craft dépliable avec arbitrage acheter / crafter par ingrédient. */
 export function CraftTree(props: CraftTreeProps) {
-  const { root, quantity, entryById, modes, onModeChange, onPriceChange } = props;
+  const { root, quantity, entryById, priceEntries, modes, onModeChange, onPriceChange } = props;
   // état d'expansion par chemin (un même objet peut apparaître dans
   // plusieurs branches et se déplier indépendamment)
   const [expanded, setExpanded] = useState<ReadonlyMap<string, boolean>>(new Map());
@@ -144,6 +147,10 @@ export function CraftTree(props: CraftTreeProps) {
             value={node.buyUnitPrice}
             onChange={value => onPriceChange(node.itemId, value)}
             label={`Prix unitaire de ${name}`}
+            withLot
+            {...(priceEntries.get(node.itemId) !== undefined
+              ? { timestamp: priceEntries.get(node.itemId)!.t }
+              : {})}
           />
           <span className="w-28 shrink-0 text-right text-sm tabular-nums">
             {totalCost !== null ? `${formatKamas(totalCost)} K` : <span className="text-zinc-500">—</span>}
