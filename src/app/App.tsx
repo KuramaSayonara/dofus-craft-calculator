@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
-import { graphFromRecipesFile, netAfterTax, type SourcingMode } from '../engine/index.ts';
 import {
+  breakablesFromFile,
+  graphFromRecipesFile,
+  netAfterTax,
+  runeTableFromFile,
+  type SourcingMode,
+} from '../engine/index.ts';
+import {
+  loadBrisage,
   loadQuestNeeds,
   loadRecipes,
   loadSearchIndex,
+  type BrisageFile,
   type QuestNeedsFile,
   type RecipesFile,
   type SearchEntry,
 } from './data.ts';
 import { prepareIndex } from './search.ts';
 import {
+  coefficientsOf,
   defaultAppData,
   inventoryOf,
   modesOfSavedCraft,
@@ -44,6 +53,7 @@ export function App() {
   const [index, setIndex] = useState<SearchEntry[] | null>(null);
   const [recipesFile, setRecipesFile] = useState<RecipesFile | null>(null);
   const [questNeeds, setQuestNeeds] = useState<QuestNeedsFile | null>(null);
+  const [brisageFile, setBrisageFile] = useState<BrisageFile | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // état persisté
@@ -65,6 +75,10 @@ export function App() {
     loadQuestNeeds()
       .then(setQuestNeeds)
       .catch(() => setQuestNeeds(null));
+    // les données de brisage sont un bonus : leur absence ne bloque pas l'app
+    loadBrisage()
+      .then(setBrisageFile)
+      .catch(() => setBrisageFile(null));
     loadPersisted()
       .then(result => {
         if (result !== null) {
@@ -93,9 +107,18 @@ export function App() {
     () => (recipesFile !== null ? graphFromRecipesFile(recipesFile) : null),
     [recipesFile],
   );
+  const runeTable = useMemo(
+    () => (brisageFile !== null ? runeTableFromFile(brisageFile) : null),
+    [brisageFile],
+  );
+  const breakables = useMemo(
+    () => (brisageFile !== null ? breakablesFromFile(brisageFile) : null),
+    [brisageFile],
+  );
   const prices = useMemo(() => priceBookOf(data), [data]);
   const priceEntries = useMemo(() => priceEntriesOf(data), [data]);
   const inventory = useMemo(() => inventoryOf(data), [data]);
+  const coefficients = useMemo(() => coefficientsOf(data), [data]);
   const volumes = useMemo(() => volumesOf(data), [data]);
   const sales = salesOf(data);
   const listedCount = sales.filter(sale => sale.status === 'listed').length;
@@ -105,6 +128,9 @@ export function App() {
 
   const setStock = (itemId: number, quantity: number | null) =>
     dispatch({ type: 'set-stock', itemId, quantity });
+
+  const setCoefficient = (itemId: number, value: number | null) =>
+    dispatch({ type: 'set-coefficient', itemId, value, now: Date.now() });
 
   const setMode = (itemId: number, mode: SourcingMode) => {
     setModes(previous => {
@@ -266,6 +292,11 @@ export function App() {
               onModeChange={setMode}
               quantity={quantity}
               onQuantityChange={setQuantity}
+              brisage={breakables?.get(selected.id) ?? null}
+              runeTable={runeTable}
+              coefficient={coefficients.get(selected.id) ?? null}
+              referenceCoefficient={data.settings.referenceCoefficient}
+              onCoefficientChange={value => setCoefficient(selected.id, value)}
               taxRate={data.settings.taxRate}
               marginalThresholdPct={data.settings.marginalThresholdPct}
               saveDefaults={

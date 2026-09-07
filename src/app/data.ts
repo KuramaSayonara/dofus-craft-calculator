@@ -2,9 +2,16 @@
 // Les données ont été validées par Zod côté ingestion ; le navigateur leur
 // fait confiance (imports de types uniquement, Zod n'est pas embarqué).
 
-import type { Meta, QuestNeed, QuestNeedsFile, RecipesFile, SearchEntry } from '../../scripts/schema.ts';
+import type {
+  BrisageFile,
+  Meta,
+  QuestNeed,
+  QuestNeedsFile,
+  RecipesFile,
+  SearchEntry,
+} from '../../scripts/schema.ts';
 
-export type { Meta, QuestNeed, QuestNeedsFile, RecipesFile, SearchEntry };
+export type { BrisageFile, Meta, QuestNeed, QuestNeedsFile, RecipesFile, SearchEntry };
 
 const DATA_BASE = `${import.meta.env.BASE_URL}data/`;
 
@@ -19,6 +26,7 @@ async function fetchJson<T>(file: string): Promise<T> {
 export const loadSearchIndex = (): Promise<SearchEntry[]> => fetchJson('search-index.json');
 export const loadRecipes = (): Promise<RecipesFile> => fetchJson('recipes.json');
 export const loadQuestNeeds = (): Promise<QuestNeedsFile> => fetchJson('quest-needs.json');
+export const loadBrisage = (): Promise<BrisageFile> => fetchJson('brisage.json');
 export const loadMeta = (): Promise<Meta> => fetchJson('meta.json');
 
 /** URL de l'icône d'un objet (null si l'objet n'a pas d'image). */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  coefficientsOf,
   defaultAppData,
   inventoryOf,
   modesOfSavedCraft,
@@ -175,5 +176,51 @@ describe('parseAppData', () => {
     expect(relu!.prices['default']).toEqual({ '289': { p: 101, t: 1 } });
     expect(relu!.inventory).toEqual({});
     expect(inventoryOf(relu!).size).toBe(0);
+  });
+});
+
+describe('coefficients de brisage', () => {
+  it('se relèvent par objet, horodatés, et null efface', () => {
+    // le taux varie d'un objet à l'autre : il se stocke comme un prix
+    let data = defaultAppData();
+    data = reduce(data, { type: 'set-coefficient', itemId: 9126, value: 38, now: NOW });
+    expect(coefficientsOf(data).get(9126)).toEqual({ p: 38, t: NOW });
+    data = reduce(data, { type: 'set-coefficient', itemId: 9126, value: 52, now: NOW + 1 });
+    expect(coefficientsOf(data).get(9126)).toEqual({ p: 52, t: NOW + 1 });
+    data = reduce(data, { type: 'set-coefficient', itemId: 9126, value: null, now: NOW + 2 });
+    expect(coefficientsOf(data).has(9126)).toBe(false);
+  });
+
+  it('sont isolés par profil, comme les kamas', () => {
+    let data = defaultAppData();
+    data = reduce(data, { type: 'set-coefficient', itemId: 9126, value: 38, now: NOW });
+    data = reduce(data, { type: 'add-profile', id: 'imagiro', name: 'Imagiro' });
+    expect(coefficientsOf(data).has(9126)).toBe(false);
+    data = reduce(data, { type: 'set-coefficient', itemId: 9126, value: 145, now: NOW });
+    expect(coefficientsOf(data).get(9126)!.p).toBe(145);
+    data = reduce(data, { type: 'switch-profile', profileId: 'default' });
+    expect(coefficientsOf(data).get(9126)!.p).toBe(38);
+  });
+
+  it('disparaissent avec leur profil', () => {
+    let data = defaultAppData();
+    data = reduce(data, { type: 'add-profile', id: 'imagiro', name: 'Imagiro' });
+    data = reduce(data, { type: 'set-coefficient', itemId: 9126, value: 38, now: NOW });
+    data = reduce(data, { type: 'delete-profile', profileId: 'imagiro' });
+    expect(data.coefficients['imagiro']).toBeUndefined();
+  });
+
+  it('relit sans perte une sauvegarde antérieure au brisage', () => {
+    const ancien = defaultAppData();
+    ancien.prices['default'] = { '1519': { p: 187, t: 1 } };
+    const brut = JSON.parse(JSON.stringify(ancien)) as Record<string, unknown>;
+    delete brut['coefficients'];
+    (brut['settings'] as Record<string, unknown>)['referenceCoefficient'] = undefined;
+    delete (brut['settings'] as Record<string, unknown>)['referenceCoefficient'];
+    const relu = parseAppData(brut);
+    expect(relu).not.toBeNull();
+    expect(relu!.coefficients).toEqual({});
+    expect(relu!.settings.referenceCoefficient).toBeNull();
+    expect(relu!.prices['default']).toEqual({ '1519': { p: 187, t: 1 } });
   });
 });

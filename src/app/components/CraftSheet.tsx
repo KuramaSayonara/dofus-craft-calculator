@@ -4,14 +4,17 @@ import {
   buildShoppingList,
   formatKamas,
   netAfterTax,
+  type BreakableItem,
   type Inventory,
   type PriceBook,
   type RecipeGraph,
+  type RuneTable,
   type SalesVolume,
   type SourcingMode,
 } from '../../engine/index.ts';
 import type { QuestNeedsFile, RecipesFile, SearchEntry } from '../data.ts';
 import type { PriceEntry } from '../state.ts';
+import { BrisageSection } from './BrisageSection.tsx';
 import { CraftTree } from './CraftTree.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 import { ProfitPanel } from './ProfitPanel.tsx';
@@ -37,6 +40,13 @@ interface CraftSheetProps {
   onModeChange: (itemId: number, mode: SourcingMode) => void;
   quantity: number;
   onQuantityChange: (value: number) => void;
+  /** lignes brisables de cet objet (null s'il ne se brise pas) */
+  brisage: BreakableItem | null;
+  runeTable: RuneTable | null;
+  /** coefficient relevé sur cet objet, daté */
+  coefficient: PriceEntry | null;
+  referenceCoefficient: number | null;
+  onCoefficientChange: (value: number | null) => void;
   taxRate: number;
   marginalThresholdPct: number;
   /** nom/dossier pré-remplis quand la fiche vient d'une sauvegarde */
@@ -64,6 +74,11 @@ export function CraftSheet(props: CraftSheetProps) {
     onModeChange,
     quantity,
     onQuantityChange,
+    brisage,
+    runeTable,
+    coefficient,
+    referenceCoefficient,
+    onCoefficientChange,
     taxRate,
     marginalThresholdPct,
     saveDefaults,
@@ -86,32 +101,27 @@ export function CraftSheet(props: CraftSheetProps) {
   const marketPrice = prices.get(entry.id) ?? null;
 
   const recipe = graph.get(entry.id);
-  if (recipe === undefined || root.children.length === 0) {
-    return (
-      <p className="rounded-lg border border-zinc-800 p-4 text-sm text-zinc-400">
-        Cet objet n'a pas de recette de craft.
-      </p>
-    );
-  }
-  const jobName = recipe.jobId !== null ? (jobs[String(recipe.jobId)] ?? `Métier ${recipe.jobId}`) : null;
+  const craftable = recipe !== undefined && root.children.length > 0;
+  const jobName =
+    recipe?.jobId != null ? (jobs[String(recipe.jobId)] ?? `Métier ${recipe.jobId}`) : null;
   const totalCost = root.craftUnitCost !== null ? root.craftUnitCost * quantity : null;
 
-  return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <ItemIcon icon={entry.i} size={10} />
-        <div className="min-w-0 flex-1 basis-48">
-          <h2 className="text-lg font-semibold">{entry.n}</h2>
-          <p className="text-sm text-zinc-400">
-            {entry.t} · niv. {entry.l}
-            {jobName !== null && (
-              <>
-                {' '}· {jobName}
-                {recipe.level !== null ? ` niv. ${recipe.level}` : ''}
-              </>
-            )}
-          </p>
-        </div>
+  const header = (
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <ItemIcon icon={entry.i} size={10} />
+      <div className="min-w-0 flex-1 basis-48">
+        <h2 className="text-lg font-semibold">{entry.n}</h2>
+        <p className="text-sm text-zinc-400">
+          {entry.t} · niv. {entry.l}
+          {jobName !== null && (
+            <>
+              {' '}· {jobName}
+              {recipe?.level != null ? ` niv. ${recipe.level}` : ''}
+            </>
+          )}
+        </p>
+      </div>
+      {craftable && (
         <label className="ml-auto flex items-center gap-2 text-sm text-zinc-400">
           Quantité
           <input
@@ -127,7 +137,48 @@ export function CraftSheet(props: CraftSheetProps) {
             className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right tabular-nums outline-none focus:border-amber-500"
           />
         </label>
-      </header>
+      )}
+    </header>
+  );
+
+  // un objet non craftable peut quand même s'acheter pour être brisé :
+  // la section brisage doit rester accessible
+  const brisageSection =
+    brisage !== null && runeTable !== null ? (
+      <BrisageSection
+        key={entry.id}
+        entry={entry}
+        item={brisage}
+        table={runeTable}
+        prices={prices}
+        priceEntries={priceEntries}
+        onPriceChange={onPriceChange}
+        coefficient={coefficient}
+        referenceCoefficient={referenceCoefficient}
+        onCoefficientChange={onCoefficientChange}
+        craftCost={root.craftUnitCost}
+        marketPrice={marketPrice}
+        taxRate={taxRate}
+        marginalThresholdPct={marginalThresholdPct}
+      />
+    ) : null;
+
+  if (!craftable) {
+    return (
+      <div className="space-y-4">
+        {header}
+        <p className="rounded-lg border border-zinc-800 p-4 text-sm text-zinc-400">
+          Cet objet n'a pas de recette de craft.
+          {brisageSection !== null && ' Il peut en revanche s’acheter puis se briser.'}
+        </p>
+        {brisageSection}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {header}
 
       {questNeeds !== null && questNeeds.needs[String(entry.id)] !== undefined && (
         <QuestDemandSection
@@ -167,6 +218,8 @@ export function CraftSheet(props: CraftSheetProps) {
           </span>
         </div>
       </section>
+
+      {brisageSection}
 
       <div className="flex flex-wrap items-center gap-2">
         <button

@@ -57,6 +57,12 @@ export type Sale = z.infer<typeof saleSchema>;
 const settingsSchema = z.object({
   taxRate: z.number().min(0).max(0.5),
   marginalThresholdPct: z.number().min(0).max(1000),
+  /**
+   * Taux de brisage « habituel » du serveur, en %. Sert de repli quand le
+   * coefficient d'un objet précis n'a pas été relevé — jamais deviné, il reste
+   * null tant que l'utilisateur ne l'a pas saisi.
+   */
+  referenceCoefficient: z.number().min(1).max(4000).nullable().default(null),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -89,6 +95,12 @@ export const appDataSchema = z.object({
       ),
     )
     .default({}),
+  /**
+   * profileId → (itemId → coefficient de brisage relevé, horodaté).
+   * Le taux varie d'un objet à l'autre ET dans le temps : il se relève comme
+   * un prix, avec sa date, et vieillit de la même façon.
+   */
+  coefficients: z.record(z.string(), z.record(z.string(), priceEntrySchema)).default({}),
   savedCrafts: z.array(savedCraftSchema),
   /** profileId → ventes (les kamas sont propres à un serveur) */
   sales: z.record(z.string(), z.array(saleSchema)),
@@ -105,9 +117,10 @@ export function defaultAppData(): AppData {
     prices: { [id]: {} },
     inventory: { [id]: {} },
     volumes: { [id]: {} },
+    coefficients: { [id]: {} },
     savedCrafts: [],
     sales: { [id]: [] },
-    settings: { taxRate: 0.02, marginalThresholdPct: 10 },
+    settings: { taxRate: 0.02, marginalThresholdPct: 10, referenceCoefficient: null },
   };
 }
 
@@ -131,6 +144,7 @@ export type Action =
   | { type: 'set-stock'; itemId: number; quantity: number | null }
   | { type: 'clear-stock' }
   | { type: 'set-volume'; itemId: number; window: 'd1' | 'd7' | 'd30'; value: number | null }
+  | { type: 'set-coefficient'; itemId: number; value: number | null; now: number }
   | { type: 'switch-profile'; profileId: string }
   | { type: 'add-profile'; id: string; name: string }
   | { type: 'rename-profile'; profileId: string; name: string }
@@ -151,6 +165,9 @@ const activeStock = (data: AppData): Record<string, number> =>
 
 const activeVolumes = (data: AppData): Record<string, SalesVolume> =>
   data.volumes[data.activeProfileId] ?? {};
+
+const activeCoefficients = (data: AppData): Record<string, PriceEntry> =>
+  data.coefficients[data.activeProfileId] ?? {};
 
 const activeSales = (data: AppData): Sale[] => data.sales[data.activeProfileId] ?? [];
 
@@ -189,6 +206,15 @@ export function reduce(data: AppData, action: Action): AppData {
       else volumes[key] = current;
       return { ...data, volumes: { ...data.volumes, [data.activeProfileId]: volumes } };
     }
+    case 'set-coefficient': {
+      const coefficients = { ...activeCoefficients(data) };
+      if (action.value === null) delete coefficients[String(action.itemId)];
+      else coefficients[String(action.itemId)] = { p: action.value, t: action.now };
+      return {
+        ...data,
+        coefficients: { ...data.coefficients, [data.activeProfileId]: coefficients },
+      };
+    }
     case 'switch-profile': {
       if (!data.profiles.some(profile => profile.id === action.profileId)) return data;
       return { ...data, activeProfileId: action.profileId };
@@ -202,6 +228,7 @@ export function reduce(data: AppData, action: Action): AppData {
         prices: { ...data.prices, [action.id]: {} },
         inventory: { ...data.inventory, [action.id]: {} },
         volumes: { ...data.volumes, [action.id]: {} },
+        coefficients: { ...data.coefficients, [action.id]: {} },
         sales: { ...data.sales, [action.id]: [] },
         activeProfileId: action.id,
       };
@@ -223,6 +250,7 @@ export function reduce(data: AppData, action: Action): AppData {
       const { [action.profileId]: _prices, ...prices } = data.prices;
       const { [action.profileId]: _stock, ...inventory } = data.inventory;
       const { [action.profileId]: _volumes, ...volumes } = data.volumes;
+      const { [action.profileId]: _coefficients, ...coefficients } = data.coefficients;
       const { [action.profileId]: _sales, ...sales } = data.sales;
       return {
         ...data,
@@ -230,6 +258,7 @@ export function reduce(data: AppData, action: Action): AppData {
         prices,
         inventory,
         volumes,
+        coefficients,
         sales,
         activeProfileId:
           data.activeProfileId === action.profileId ? profiles[0]!.id : data.activeProfileId,
@@ -325,6 +354,15 @@ export function volumesOf(data: AppData): Map<number, SalesVolume> {
     volumes.set(Number(itemId), volume);
   }
   return volumes;
+}
+
+/** Coefficients de brisage relevés sur le profil actif (Map id → taux daté). */
+export function coefficientsOf(data: AppData): Map<number, PriceEntry> {
+  const coefficients = new Map<number, PriceEntry>();
+  for (const [itemId, entry] of Object.entries(activeCoefficients(data))) {
+    coefficients.set(Number(itemId), entry);
+  }
+  return coefficients;
 }
 
 export function salesOf(data: AppData): Sale[] {
