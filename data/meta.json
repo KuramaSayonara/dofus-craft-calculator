@@ -1,8 +1,8 @@
 {
-  "gameVersion": "3.6.8.8",
+  "gameVersion": "3.6.10.11",
   "jobsSource": "dofusdb",
   "counts": {
-    "itemsTotal": 17041,
+    "itemsTotal": 17051,
     "craftableTotal": 4847,
     "byCategory": {
       "equipment": {
@@ -22,7 +22,7 @@
         "craftable": 231
       },
       "cosmetics": {
-        "items": 2410,
+        "items": 2420,
         "craftable": 6
       }
     },
@@ -44,6 +44,8 @@
       "Bûcheron": 32
     },
     "questDemandedItems": 2158,
-    "questDemandedCraftables": 428
+    "questDemandedCraftables": 428,
+    "breakableItems": 2855,
+    "breakableCraftables": 2769
   }
 }

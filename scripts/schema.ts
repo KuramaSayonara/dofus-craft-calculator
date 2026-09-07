@@ -12,6 +12,22 @@ export const rawRecipeEntrySchema = z.object({
   quantity: z.number().int().positive(),
 });
 
+// Une ligne d'effet d'un équipement. `ignore_int_max` signale un jet fixe :
+// la valeur est alors int_minimum et int_maximum ne veut rien dire.
+export const rawEffectSchema = z.looseObject({
+  int_minimum: z.number().int(),
+  int_maximum: z.number().int(),
+  ignore_int_min: z.boolean().nullish(),
+  ignore_int_max: z.boolean().nullish(),
+  type: z.looseObject({
+    id: z.number().int(),
+    name: z.string().min(1),
+    is_active: z.boolean().nullish(),
+    is_meta: z.boolean().nullish(),
+  }),
+});
+export type RawEffect = z.infer<typeof rawEffectSchema>;
+
 export const rawItemSchema = z.looseObject({
   ankama_id: z.number().int().positive(),
   name: z.string().min(1),
@@ -19,6 +35,7 @@ export const rawItemSchema = z.looseObject({
   type: z.looseObject({ name: z.string().min(1), id: z.number().int() }),
   image_urls: z.looseObject({ icon: z.string().min(1) }).nullish(),
   recipe: z.array(rawRecipeEntrySchema).nullish(),
+  effects: z.array(rawEffectSchema).nullish(),
 });
 export type RawItem = z.infer<typeof rawItemSchema>;
 
@@ -157,6 +174,44 @@ export const questNeedsFileSchema = z.object({
 });
 export type QuestNeedsFile = z.infer<typeof questNeedsFileSchema>;
 
+// data/brisage.json — ce qu'il faut pour calculer un brisage.
+// `runes` : la table des runes (voir scripts/runes.ts pour l'origine des
+// valeurs) ; `items` : les lignes brisables de chaque équipement.
+// k=clé, n=libellé de la stat, r=nom de la rune, w=poids d'un point,
+// g=jet donné par une rune, b/pa/ra=ids des objets rune.
+export const runeRecordSchema = z.object({
+  k: z.string().min(1),
+  n: z.string().min(1),
+  r: z.string().min(1),
+  w: z.number().positive(),
+  g: z.number().int().positive(),
+  b: z.number().int().positive(),
+  pa: z.number().int().positive().nullable(),
+  ra: z.number().int().positive().nullable(),
+});
+export type RuneRecord = z.infer<typeof runeRecordSchema>;
+
+/** Une ligne brisable : [clé de rune, jet minimum, jet maximum]. */
+export const brisageLineSchema = z.tuple([
+  z.string().min(1),
+  z.number().int().positive(),
+  z.number().int().positive(),
+]);
+export type BrisageLine = z.infer<typeof brisageLineSchema>;
+
+// lv = niveau de l'objet (il pèse dans la formule), l = lignes brisables
+export const brisageItemSchema = z.object({
+  lv: z.number().int().min(0),
+  l: z.array(brisageLineSchema).min(1),
+});
+export type BrisageItem = z.infer<typeof brisageItemSchema>;
+
+export const brisageFileSchema = z.object({
+  runes: z.array(runeRecordSchema).min(1),
+  items: z.record(z.string(), brisageItemSchema),
+});
+export type BrisageFile = z.infer<typeof brisageFileSchema>;
+
 // data/search-index.json — index léger chargé au premier rendu.
 // Clés courtes volontairement : n=nom, l=niveau, t=type, c=catégorie,
 // i=icône, r=1 si craftable, j=id métier (seulement si craftable et connu).
@@ -188,6 +243,9 @@ export const metaSchema = z.object({
     /** objets réclamés par au moins une quête ; défaut pour relire un meta.json antérieur */
     questDemandedItems: z.number().int().min(0).default(0),
     questDemandedCraftables: z.number().int().min(0).default(0),
+    /** équipements dont au moins une ligne donne des runes ; défaut = relecture d'un meta.json antérieur */
+    breakableItems: z.number().int().min(0).default(0),
+    breakableCraftables: z.number().int().min(0).default(0),
   }),
 });
 export type Meta = z.infer<typeof metaSchema>;

@@ -4,7 +4,8 @@
 // Enrichissement : DofusDB (métier + niveau de craft de chaque recette).
 // Voir docs/DATA-SOURCES.md pour la justification.
 //
-// Produit data/items.json, data/recipes.json, data/search-index.json, data/meta.json.
+// Produit data/items.json, data/recipes.json, data/search-index.json,
+// data/brisage.json et data/meta.json.
 // Sorties déterministes (triées, sans horodatage) : deux runs sur les mêmes
 // données API produisent des fichiers identiques au byte près.
 //
@@ -38,8 +39,16 @@ import {
   rawItemSchema,
   recipeRecordSchema,
   searchEntrySchema,
+  brisageFileSchema,
+  brisageItemSchema,
+  type BrisageItem,
+  type BrisageLine,
+  type RawEffect,
+  type RuneRecord,
   type QuestNeed,
 } from './schema.ts';
+
+import { BREAKABLE_TYPES, IGNORED_EFFECT_IDS, RUNES } from './runes.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = join(ROOT, 'data');
@@ -106,6 +115,7 @@ interface LoadedItem {
   category: Category;
   icon: number | string | null;
   recipe: { itemId: number; subtype: string; quantity: number }[];
+  effects: RawEffect[];
 }
 
 async function loadDofusdude(): Promise<{ gameVersion: string; items: Map<number, LoadedItem> }> {
@@ -149,6 +159,8 @@ async function loadDofusdude(): Promise<{ gameVersion: string; items: Map<number
           subtype: entry.item_subtype,
           quantity: entry.quantity,
         })),
+        // les effets ne servent qu'au brisage : inutile de les garder ailleurs
+        effects: category === 'equipment' ? (item.effects ?? []) : [],
       });
     }
     console.log(`  ${payload.items.length} objets`);
@@ -417,6 +429,189 @@ async function loadDofusdbQuests(items: Map<number, LoadedItem>): Promise<QuestI
 }
 
 // ---------------------------------------------------------------------------
+// 4. Brisage : lignes brisables de chaque équipement
+// ---------------------------------------------------------------------------
+
+/**
+ * Combien de fois un effet non mappé peut apparaître avant que le run échoue.
+ * Au-delà, c'est probablement une rune oubliée dans la table — et l'oublier
+ * reviendrait à sous-estimer silencieusement tous les brisages concernés.
+ */
+const UNMAPPED_EFFECT_LIMIT = 25;
+
+interface BrisageBuild {
+  runes: RuneRecord[];
+  items: [number, BrisageItem][];
+  breakableCraftables: number;
+}
+
+/**
+ * Jet retenu pour une ligne : [min, max].
+ * `ignore_int_max` signale un jet fixe (la valeur est int_minimum).
+ * Une ligne « drapeau » sans valeur chiffrée (Arme de chasse) compte pour 1.
+ * Une ligne négative ne rend aucune rune : elle est écartée.
+ */
+function lineRoll(effect: RawEffect): [number, number] | null {
+  const flag = effect.ignore_int_min === true && effect.ignore_int_max === true;
+  if (flag) {
+    const value = effect.int_minimum <= 0 ? 1 : effect.int_minimum;
+    return [value, value];
+  }
+  const max = effect.ignore_int_max === true ? effect.int_minimum : effect.int_maximum;
+  if (max <= 0) return null; // ligne négative ou nulle
+  return [Math.max(1, effect.int_minimum), Math.max(1, max)];
+}
+
+function buildBrisage(items: Map<number, LoadedItem>): BrisageBuild {
+  const byEffectId = new Map(RUNES.map(rune => [rune.dude, rune]));
+  const seenEffects = new Set<number>();
+  const unmapped = new Map<number, { name: string; count: number }>();
+
+  const entries: [number, BrisageItem][] = [];
+  let breakableCraftables = 0;
+
+  for (const item of [...items.values()].sort((a, b) => a.id - b.id)) {
+    if (item.category !== 'equipment' || !BREAKABLE_TYPES.has(item.type)) continue;
+
+    const lines: BrisageLine[] = [];
+    for (const effect of item.effects) {
+      // les effets « actifs » sont les dégâts de l'arme et les effets de sort :
+      // ils ne donnent aucune rune
+      if (effect.type.is_active === true || effect.type.is_meta === true) continue;
+      const rune = byEffectId.get(effect.type.id);
+      if (rune === undefined) {
+        if (!IGNORED_EFFECT_IDS.has(effect.type.id)) {
+          const seen = unmapped.get(effect.type.id) ?? { name: effect.type.name, count: 0 };
+          seen.count++;
+          unmapped.set(effect.type.id, seen);
+        }
+        continue;
+      }
+      seenEffects.add(effect.type.id);
+      const roll = lineRoll(effect);
+      if (roll === null) continue;
+      lines.push([rune.key, roll[0], roll[1]]);
+    }
+
+    if (lines.length === 0) continue;
+    entries.push([item.id, { lv: item.level, l: lines }]);
+    if (item.recipe.length > 0) breakableCraftables++;
+  }
+
+  // garde-fou : un effet fréquent hors table est probablement une rune oubliée
+  const suspicious = [...unmapped.entries()]
+    .filter(([, seen]) => seen.count >= UNMAPPED_EFFECT_LIMIT)
+    .sort((a, b) => b[1].count - a[1].count);
+  if (suspicious.length > 0) {
+    fail(
+      "effets non mappés fréquents (rune oubliée dans scripts/runes.ts, " +
+        "ou effet à ajouter à IGNORED_EFFECT_IDS) :\n  " +
+        suspicious
+          .map(([id, seen]) => `id ${id} « ${seen.name} » sur ${seen.count} objets`)
+          .join('\n  '),
+    );
+  }
+  if (unmapped.size > 0) {
+    const rare = [...unmapped.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+    console.warn(
+      `  effets rares non mappés (ignorés) : ${rare
+        .map(([id, seen]) => `${seen.name} (id ${id}, ×${seen.count})`)
+        .join(', ')}`,
+    );
+  }
+
+  // garde-fou : chaque rune de la table doit exister dans le catalogue
+  const runes: RuneRecord[] = RUNES.map(rune => {
+    const tiers = [
+      ['de base', rune.basic] as const,
+      ['Pa', rune.pa] as const,
+      ['Ra', rune.ra] as const,
+    ];
+    for (const [label, id] of tiers) {
+      if (id !== null && !items.has(id)) {
+        fail(`rune ${label} introuvable dans le catalogue : ${rune.rune} (id ${id})`);
+      }
+    }
+    const catalog = items.get(rune.basic)!;
+    if (catalog.name !== rune.rune) {
+      fail(`la rune ${rune.rune} (id ${rune.basic}) s'appelle « ${catalog.name} » côté API`);
+    }
+    return {
+      k: rune.key,
+      n: rune.label,
+      r: rune.rune,
+      w: rune.weight,
+      g: rune.grant,
+      b: rune.basic,
+      pa: rune.pa,
+      ra: rune.ra,
+    };
+  });
+
+  // information : une statistique de la table qu'aucun équipement ne porte
+  const unused = RUNES.filter(rune => !seenEffects.has(rune.dude));
+  if (unused.length > 0) {
+    console.warn(`  runes jamais rencontrées sur un objet : ${unused.map(r => r.rune).join(', ')}`);
+  }
+
+  if (entries.length === 0) fail('aucun équipement brisable — refus de continuer');
+  return { runes, items: entries, breakableCraftables };
+}
+
+/**
+ * Revérifie la table des runes contre DofusDB : l'effet porté par chaque rune
+ * et son jet (une Rune Vi donne bien +5 Vitalité). Silencieux si DofusDB est
+ * indisponible — c'est un contrôle, pas une source.
+ */
+async function verifyRunes(): Promise<void> {
+  const byId = new Map(RUNES.map(rune => [rune.basic, rune]));
+  const ids = [...byId.keys()];
+  const CHUNK = 20;
+  const checked = new Set<number>();
+  try {
+    for (let start = 0; start < ids.length; start += CHUNK) {
+      const chunk = ids.slice(start, start + CHUNK);
+      const query = chunk.map(id => `id[$in][]=${id}`).join('&');
+      const page = feathersPageSchema.parse(
+        await fetchJson(`${CONFIG.dbBase}/items?${query}&$limit=${CHUNK}`),
+      );
+      for (const raw of page.data) {
+        const parsed = z
+          .looseObject({
+            id: z.number().int(),
+            possibleEffects: z
+              .array(z.looseObject({ effectId: z.number().int(), diceNum: z.number().int() }))
+              .nullish(),
+          })
+          .parse(raw);
+        const rune = byId.get(parsed.id);
+        if (rune === undefined) continue;
+        const effect = parsed.possibleEffects?.[0];
+        if (effect === undefined) continue;
+        if (effect.effectId !== rune.db) {
+          fail(
+            `${rune.rune} : effet ${effect.effectId} côté DofusDB, ${rune.db} dans la table ` +
+              `(scripts/runes.ts à corriger — le brisage attribuerait les mauvaises runes)`,
+          );
+        }
+        // les runes-drapeau (Rune de chasse) portent diceNum 0 pour un jet de 1
+        const grant = effect.diceNum === 0 ? 1 : effect.diceNum;
+        if (grant !== rune.grant) {
+          fail(`${rune.rune} : jet ${grant} côté DofusDB, ${rune.grant} dans la table`);
+        }
+        checked.add(parsed.id);
+      }
+      await sleep(CONFIG.dbPageDelayMs);
+    }
+  } catch (error) {
+    if (error instanceof IngestError) throw error;
+    console.warn(`  vérification des runes impossible (DofusDB) : ${String(error)}`);
+    return;
+  }
+  console.log(`  ${checked.size}/${ids.length} runes vérifiées contre DofusDB`);
+}
+
+// ---------------------------------------------------------------------------
 // 4. Garde-fou anti-régression par rapport au run précédent
 // ---------------------------------------------------------------------------
 
@@ -438,6 +633,12 @@ function checkAgainstPreviousRun(meta: Meta): void {
     fail(
       `régression : ${after.itemsTotal} objets contre ${before.itemsTotal} au run précédent. ` +
         `Si la baisse est légitime (retrait de contenu par Ankama), relancer avec ALLOW_SHRINK=1.`,
+    );
+  }
+  if (after.breakableItems < before.breakableItems) {
+    fail(
+      `régression : ${after.breakableItems} objets brisables contre ${before.breakableItems} ` +
+        `au run précédent. Si la baisse est légitime, relancer avec ALLOW_SHRINK=1.`,
     );
   }
   if (after.craftableTotal < before.craftableTotal) {
@@ -467,6 +668,14 @@ function writeQuestNeedsFile(
   writeFileSync(path, `{\n"categories": ${JSON.stringify(categories)},\n"needs": {\n${body}\n}\n}\n`);
 }
 
+function writeBrisageFile(path: string, runes: RuneRecord[], items: [number, BrisageItem][]): void {
+  const runeLines = runes.map(rune => JSON.stringify(rune)).join(',\n');
+  const itemLines = items
+    .map(([id, record]) => `${JSON.stringify(String(id))}:${JSON.stringify(record)}`)
+    .join(',\n');
+  writeFileSync(path, `{\n"runes": [\n${runeLines}\n],\n"items": {\n${itemLines}\n}\n}\n`);
+}
+
 function writeRecipesFile(path: string, jobs: Map<number, string>, recipes: [number, RecipeRecord][]): void {
   const jobsObj = Object.fromEntries([...jobs.entries()].sort((a, b) => a[0] - b[0]).map(([id, name]) => [String(id), name]));
   const body = recipes.map(([id, record]) => `${JSON.stringify(String(id))}:${JSON.stringify(record)}`).join(',\n');
@@ -483,6 +692,11 @@ async function main(): Promise<void> {
 
   const jobInfo = await loadDofusdbJobs();
   const questInfo = await loadDofusdbQuests(items);
+
+  console.log('Brisage : lignes brisables et table des runes…');
+  const brisage = buildBrisage(items);
+  console.log(`  ${brisage.items.length} objets brisables, ${brisage.runes.length} runes`);
+  await verifyRunes();
 
   const sorted = [...items.values()].sort((a, b) => a.id - b.id);
   const craftables = sorted.filter(item => item.recipe.length > 0);
@@ -580,6 +794,8 @@ async function main(): Promise<void> {
       craftableByJob: Object.fromEntries(Object.entries(craftableByJob).sort((a, b) => b[1] - a[1])),
       questDemandedItems: Object.keys(questNeeds).length,
       questDemandedCraftables,
+      breakableItems: brisage.items.length,
+      breakableCraftables: brisage.breakableCraftables,
     },
   };
 
@@ -589,6 +805,11 @@ async function main(): Promise<void> {
   itemRecords.forEach(record => itemRecordSchema.parse(record));
   searchEntries.forEach(entry => searchEntrySchema.parse(entry));
   recipeEntries.forEach(([, record]) => recipeRecordSchema.parse(record));
+  brisage.items.forEach(([, record]) => brisageItemSchema.parse(record));
+  brisageFileSchema.parse({
+    runes: brisage.runes,
+    items: Object.fromEntries(brisage.items.map(([id, record]) => [String(id), record])),
+  });
   metaSchema.parse(meta);
 
   // catégories réduites à celles réellement citées par un besoin retenu
@@ -610,6 +831,7 @@ async function main(): Promise<void> {
   writeJsonArray(join(DATA_DIR, 'search-index.json'), searchEntries);
   writeRecipesFile(join(DATA_DIR, 'recipes.json'), usedJobs, recipeEntries);
   writeQuestNeedsFile(join(DATA_DIR, 'quest-needs.json'), usedCategories, questNeeds);
+  writeBrisageFile(join(DATA_DIR, 'brisage.json'), brisage.runes, brisage.items);
   writeFileSync(join(DATA_DIR, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
 
   console.log('');
@@ -622,6 +844,10 @@ async function main(): Promise<void> {
         ? `${meta.counts.questDemandedItems} objets réclamés, dont ${questDemandedCraftables} craftables`
         : 'INDISPONIBLES'
     }`,
+  );
+  console.log(
+    `  brisage : ${meta.counts.breakableItems} objets brisables, dont ` +
+      `${meta.counts.breakableCraftables} craftables`,
   );
   for (const [job, count] of Object.entries(meta.counts.craftableByJob)) {
     console.log(`    ${job.padEnd(20)} ${count}`);

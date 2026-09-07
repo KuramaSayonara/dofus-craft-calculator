@@ -7,8 +7,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
+  type BrisageItem,
   type ItemRecord,
   type RecipeRecord,
+  brisageFileSchema,
   itemRecordSchema,
   metaSchema,
   recipesFileSchema,
@@ -32,6 +34,15 @@ function loadRecipes(dir: string): Map<string, RecipeRecord> | null {
   if (!existsSync(path)) return null;
   const file = recipesFileSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
   return new Map(Object.entries(file.recipes));
+}
+
+// Les lignes brisables changent quand Ankama retouche les statistiques d'un
+// objet : c'est ce qui fait varier la valeur de son brisage.
+function loadBrisage(dir: string): Map<string, BrisageItem> | null {
+  const path = join(dir, 'brisage.json');
+  if (!existsSync(path)) return null;
+  const file = brisageFileSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  return new Map(Object.entries(file.items));
 }
 
 function loadVersion(dir: string): string | null {
@@ -63,6 +74,8 @@ if (newItems === null || newRecipes === null) {
 
 const oldItems = loadItems(oldDir);
 const oldRecipes = loadRecipes(oldDir);
+const oldBrisage = loadBrisage(oldDir);
+const newBrisage = loadBrisage(newDir);
 const oldVersion = loadVersion(oldDir);
 const newVersion = loadVersion(newDir);
 
@@ -83,11 +96,26 @@ console.log('');
 const items = diffKeys(oldItems, newItems);
 const recipes = diffKeys(oldRecipes, newRecipes);
 
-console.log('| | Objets | Recettes |');
-console.log('|---|---:|---:|');
-console.log(`| Ajoutés | ${items.added.length} | ${recipes.added.length} |`);
-console.log(`| Modifiés | ${items.changed.length} | ${recipes.changed.length} |`);
-console.log(`| Supprimés | ${items.removed.length} | ${recipes.removed.length} |`);
+const brisage =
+  oldBrisage !== null && newBrisage !== null ? diffKeys(oldBrisage, newBrisage) : null;
+const brisageCell = (count: number | undefined): string =>
+  count === undefined ? '—' : String(count);
+
+console.log('| | Objets | Recettes | Objets brisables |');
+console.log('|---|---:|---:|---:|');
+console.log(
+  `| Ajoutés | ${items.added.length} | ${recipes.added.length} | ${brisageCell(brisage?.added.length)} |`,
+);
+console.log(
+  `| Modifiés | ${items.changed.length} | ${recipes.changed.length} | ${brisageCell(brisage?.changed.length)} |`,
+);
+console.log(
+  `| Supprimés | ${items.removed.length} | ${recipes.removed.length} | ${brisageCell(brisage?.removed.length)} |`,
+);
+if (brisage === null) {
+  console.log('');
+  console.log('_Première génération de `brisage.json` : rien à comparer._');
+}
 console.log('');
 
 const LIST_LIMIT = 30;
@@ -120,6 +148,19 @@ function listRecipes(title: string, keys: string[]): void {
 listRecipes('Recettes ajoutées', recipes.added);
 listRecipes('Recettes modifiées', recipes.changed);
 listRecipes('Recettes supprimées', recipes.removed);
+
+if (brisage !== null && brisage.changed.length > 0) {
+  console.log(`### Statistiques modifiées (brisage) (${brisage.changed.length})`);
+  for (const key of brisage.changed.slice(0, LIST_LIMIT)) {
+    const id = Number(key);
+    const item = newItems.get(id) ?? oldItems.get(id);
+    console.log(item !== undefined ? `- ${item.name} (id ${id})` : `- id ${id}`);
+  }
+  if (brisage.changed.length > LIST_LIMIT) {
+    console.log(`- … et ${brisage.changed.length - LIST_LIMIT} de plus`);
+  }
+  console.log('');
+}
 
 console.log('---');
 console.log('_Générée automatiquement par le workflow `update-data` (`scripts/ingest.ts`)._');
