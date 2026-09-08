@@ -86,7 +86,8 @@ export function PriceInput({ value, onChange, label, placeholder, withLot, times
         onBlur={commit}
         onKeyDown={event => {
           if (event.key === 'Enter') {
-            commit();
+            // on ne valide QUE dans onBlur : appeler commit() ici puis perdre le
+            // focus l'exécutait deux fois, la seconde avec une saisie périmée
             event.currentTarget.blur();
           } else if (event.key === 'Escape') {
             setDraft(null);
