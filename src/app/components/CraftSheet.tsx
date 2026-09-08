@@ -146,7 +146,10 @@ export function CraftSheet(props: CraftSheetProps) {
   const brisageSection =
     brisage !== null && runeTable !== null ? (
       <BrisageSection
-        key={entry.id}
+        // clé distincte de celle de la liste de courses : deux enfants d'un même
+        // parent qui partagent une clé, React en duplique un et perd l'état de
+        // l'autre (les champs de prix devenaient inutilisables)
+        key={`brisage-${entry.id}`}
         entry={entry}
         item={brisage}
         table={runeTable}
