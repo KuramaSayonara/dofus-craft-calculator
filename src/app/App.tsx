@@ -33,16 +33,18 @@ import {
 import { loadPersisted, persist, type StorageBackend } from './storage.ts';
 import { CraftSheet } from './components/CraftSheet.tsx';
 import { PricesView } from './components/PricesView.tsx';
+import { RunesView } from './components/RunesView.tsx';
 import { SalesView } from './components/SalesView.tsx';
 import { SavesView } from './components/SavesView.tsx';
 import { SearchBox } from './components/SearchBox.tsx';
 import { TopCraftsView } from './components/TopCraftsView.tsx';
 
-type View = 'craft' | 'top' | 'prices' | 'saves' | 'sales';
+type View = 'craft' | 'top' | 'runes' | 'prices' | 'saves' | 'sales';
 
 const VIEW_LABELS: Record<View, string> = {
   craft: 'Craft',
   top: 'Top crafts',
+  runes: 'Runes',
   prices: 'Prix',
   saves: 'Sauvegardes',
   sales: 'Ventes',
@@ -115,6 +117,11 @@ export function App() {
     () => (brisageFile !== null ? breakablesFromFile(brisageFile) : null),
     [brisageFile],
   );
+  // toutes les runes de forgemagie du jeu : le type suffit à les isoler
+  const runeEntries = useMemo(
+    () => (index ?? []).filter(entry => entry.t === 'Rune de forgemagie'),
+    [index],
+  );
   const prices = useMemo(() => priceBookOf(data), [data]);
   const priceEntries = useMemo(() => priceEntriesOf(data), [data]);
   const inventory = useMemo(() => inventoryOf(data), [data]);
@@ -131,6 +138,9 @@ export function App() {
 
   const setCoefficient = (itemId: number, value: number | null) =>
     dispatch({ type: 'set-coefficient', itemId, value, now: Date.now() });
+
+  const importPrices = (entries: ReadonlyArray<readonly [number, number]>) =>
+    dispatch({ type: 'import-prices', entries, now: Date.now() });
 
   const setMode = (itemId: number, mode: SourcingMode) => {
     setModes(previous => {
@@ -321,6 +331,15 @@ export function App() {
           taxRate={data.settings.taxRate}
           marginalThresholdPct={data.settings.marginalThresholdPct}
           onOpenItem={openItem}
+        />
+      ) : view === 'runes' ? (
+        <RunesView
+          runes={runeEntries}
+          runeTable={runeTable}
+          prices={prices}
+          priceEntries={priceEntries}
+          onPriceChange={setPrice}
+          onImportPrices={importPrices}
         />
       ) : view === 'prices' ? (
         <PricesView
