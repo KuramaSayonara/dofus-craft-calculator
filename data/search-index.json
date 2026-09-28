@@ -15242,6 +15242,9 @@
 {"id":32480,"n":"Lecture éphémère - Pensée de Milivar","l":1,"t":"Document","c":"consumables","i":156025,"r":0},
 {"id":32483,"n":"Lecture éphémère - Pensée de Milivar","l":1,"t":"Document","c":"consumables","i":156025,"r":0},
 {"id":32484,"n":"Lecture éphémère - Pensée de Milivar","l":1,"t":"Document","c":"consumables","i":156025,"r":0},
+{"id":32485,"n":"Rune d'invocation de Joris","l":1,"t":"La source - l'héritage des Dofus","c":"quest","i":12014,"r":0},
+{"id":32486,"n":"Carte de la Source","l":1,"t":"La source - l'héritage des Dofus","c":"quest","i":136150,"r":0},
+{"id":32487,"n":"Notes de Joris","l":1,"t":"La source - l'héritage des Dofus","c":"quest","i":24026,"r":0},
 {"id":32491,"n":"Éclat entravant","l":20,"t":"Éclats","c":"consumables","i":51502,"r":0},
 {"id":32492,"n":"Éclat évasif","l":20,"t":"Éclats","c":"consumables","i":51503,"r":0},
 {"id":32493,"n":"Éclat répulsif","l":20,"t":"Éclats","c":"consumables","i":51504,"r":0},
@@ -17049,5 +17052,15 @@
 {"id":34559,"n":"Égide de Sagesse","l":1,"t":"Bouclier d'apparat","c":"cosmetics","i":82604,"r":0},
 {"id":34560,"n":"Manteau de Lumière","l":1,"t":"Cape d'apparat","c":"cosmetics","i":17707,"r":0},
 {"id":34561,"n":"Heaume de l'Aube","l":1,"t":"Chapeau d'apparat","c":"cosmetics","i":16925,"r":0},
-{"id":34590,"n":"Bouclier de Zi","l":1,"t":"Bouclier d'apparat","c":"cosmetics","i":82606,"r":0}
+{"id":34590,"n":"Bouclier de Zi","l":1,"t":"Bouclier d'apparat","c":"cosmetics","i":82606,"r":0},
+{"id":34606,"n":"Masque de Porcelune","l":1,"t":"Chapeau d'apparat","c":"cosmetics","i":16927,"r":0},
+{"id":34607,"n":"Cape de Porcelune","l":1,"t":"Cape d'apparat","c":"cosmetics","i":17709,"r":0},
+{"id":34608,"n":"Bouclier de Porcelune","l":1,"t":"Bouclier d'apparat","c":"cosmetics","i":82607,"r":0},
+{"id":34609,"n":"Bouflune","l":60,"t":"Montilier d'apparat","c":"cosmetics","i":121188,"r":0},
+{"id":34610,"n":"Amphaïence","l":1,"t":"Familier d'apparat","c":"cosmetics","i":18955,"r":0},
+{"id":34614,"n":"Miniduk Krosmique","l":1,"t":"Familier d'apparat","c":"cosmetics","i":18954,"r":0},
+{"id":34622,"n":"Minimou","l":1,"t":"Familier d'apparat","c":"cosmetics","i":18957,"r":0},
+{"id":34623,"n":"Marmiclier","l":1,"t":"Bouclier d'apparat","c":"cosmetics","i":82610,"r":0},
+{"id":34625,"n":"Mémo","l":1,"t":"La source - l'héritage des Dofus","c":"quest","i":15809,"r":0},
+{"id":34645,"n":"Bras de Porcelune","l":1,"t":"Costume","c":"cosmetics","i":164327,"r":0}
 ]

@@ -1,8 +1,8 @@
 {
-  "gameVersion": "3.6.10.11",
+  "gameVersion": "3.6.12.16",
   "jobsSource": "dofusdb",
   "counts": {
-    "itemsTotal": 17051,
+    "itemsTotal": 17064,
     "craftableTotal": 4847,
     "byCategory": {
       "equipment": {
@@ -18,11 +18,11 @@
         "craftable": 378
       },
       "quest": {
-        "items": 3358,
+        "items": 3362,
         "craftable": 231
       },
       "cosmetics": {
-        "items": 2420,
+        "items": 2429,
         "craftable": 6
       }
     },
