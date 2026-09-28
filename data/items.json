@@ -15242,6 +15242,9 @@
 {"id":32480,"name":"Lecture éphémère - Pensée de Milivar","level":1,"type":"Document","category":"consumables","icon":156025},
 {"id":32483,"name":"Lecture éphémère - Pensée de Milivar","level":1,"type":"Document","category":"consumables","icon":156025},
 {"id":32484,"name":"Lecture éphémère - Pensée de Milivar","level":1,"type":"Document","category":"consumables","icon":156025},
+{"id":32485,"name":"Rune d'invocation de Joris","level":1,"type":"La source - l'héritage des Dofus","category":"quest","icon":12014},
+{"id":32486,"name":"Carte de la Source","level":1,"type":"La source - l'héritage des Dofus","category":"quest","icon":136150},
+{"id":32487,"name":"Notes de Joris","level":1,"type":"La source - l'héritage des Dofus","category":"quest","icon":24026},
 {"id":32491,"name":"Éclat entravant","level":20,"type":"Éclats","category":"consumables","icon":51502},
 {"id":32492,"name":"Éclat évasif","level":20,"type":"Éclats","category":"consumables","icon":51503},
 {"id":32493,"name":"Éclat répulsif","level":20,"type":"Éclats","category":"consumables","icon":51504},
@@ -17049,5 +17052,15 @@
 {"id":34559,"name":"Égide de Sagesse","level":1,"type":"Bouclier d'apparat","category":"cosmetics","icon":82604},
 {"id":34560,"name":"Manteau de Lumière","level":1,"type":"Cape d'apparat","category":"cosmetics","icon":17707},
 {"id":34561,"name":"Heaume de l'Aube","level":1,"type":"Chapeau d'apparat","category":"cosmetics","icon":16925},
-{"id":34590,"name":"Bouclier de Zi","level":1,"type":"Bouclier d'apparat","category":"cosmetics","icon":82606}
+{"id":34590,"name":"Bouclier de Zi","level":1,"type":"Bouclier d'apparat","category":"cosmetics","icon":82606},
+{"id":34606,"name":"Masque de Porcelune","level":1,"type":"Chapeau d'apparat","category":"cosmetics","icon":16927},
+{"id":34607,"name":"Cape de Porcelune","level":1,"type":"Cape d'apparat","category":"cosmetics","icon":17709},
+{"id":34608,"name":"Bouclier de Porcelune","level":1,"type":"Bouclier d'apparat","category":"cosmetics","icon":82607},
+{"id":34609,"name":"Bouflune","level":60,"type":"Montilier d'apparat","category":"cosmetics","icon":121188},
+{"id":34610,"name":"Amphaïence","level":1,"type":"Familier d'apparat","category":"cosmetics","icon":18955},
+{"id":34614,"name":"Miniduk Krosmique","level":1,"type":"Familier d'apparat","category":"cosmetics","icon":18954},
+{"id":34622,"name":"Minimou","level":1,"type":"Familier d'apparat","category":"cosmetics","icon":18957},
+{"id":34623,"name":"Marmiclier","level":1,"type":"Bouclier d'apparat","category":"cosmetics","icon":82610},
+{"id":34625,"name":"Mémo","level":1,"type":"La source - l'héritage des Dofus","category":"quest","icon":15809},
+{"id":34645,"name":"Bras de Porcelune","level":1,"type":"Costume","category":"cosmetics","icon":164327}
 ]
